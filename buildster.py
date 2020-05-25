@@ -94,8 +94,10 @@ def cmake_build(path):
 def cmake_install(path, installation):
 	command = []
 	command.append("cmake")
-	command.append("--install")
+	command.append("--build")
 	command.append(path)
+	command.append("--target")
+	command.append("install")
 	result = execute_command(command)
 	return result
 
