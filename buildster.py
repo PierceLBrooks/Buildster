@@ -13,7 +13,7 @@ def wd():
 	filename = inspect.getframeinfo(inspect.currentframe()).filename
 	path = os.path.dirname(os.path.abspath(filename))
 	return path
-	
+
 def write(descriptor, line):
 	descriptor.write(line+"\n")
 	
@@ -22,6 +22,59 @@ def read(path):
 	lines = descriptor.readlines()
 	descriptor.close()
 	return lines
+
+def flatten(output, prefix = "", suffix = ""):
+	final = ""
+	for i in range(len(output)):
+		temp = output[i]
+		final += prefix
+		for j in range(len(temp)):
+			final += temp[j]
+		final += suffix
+	return final
+
+def ensure(string):
+	if (string == None):
+		return ""
+	if not (type(string) == str):
+		return ""
+	return string
+
+def split(path):
+	result = path.replace("\\", "/").split("/")
+	length = len(result)
+	for i in range(length):
+		if (result[i].endswith(":")):
+			result[i] = result[i]+"\\"
+	return result
+
+def adjust(path):
+	paths = split(path)
+	length = len(paths)
+	if (length > 1):
+		root = paths[0]
+		for i in range(length):
+			if (i == 0):
+				continue
+			if (i > 1):
+				if not (os.path.exists(root)):
+					break
+			next = os.path.join(root, paths[i])
+			if (os.path.exists(next)):
+				if (os.path.isdir(next)):
+					root = next
+				else:
+					next = os.path.join(root, flatten(read(next)).strip())
+					if (os.path.exists(next)):
+						if (os.path.isdir(next)):
+							root = next
+			else:
+				break
+			if (i == length-1):
+				if (os.path.exists(root)):
+					path = root
+					break
+	return path
 	
 def get_parent(parents, tag):
 	length = len(parents)
@@ -559,7 +612,7 @@ class Dependency(Build):
 		return True
 		
 	def getPath(self, owner, purpose):
-		return os.path.join(wd(), owner.context.root.directory.getContent(), owner.directory.getContent(), purpose, "dependencies", self.label.getContent())
+		return adjust(os.path.join(wd(), owner.context.root.directory.getContent(), owner.directory.getContent(), purpose, "dependencies", self.label.getContent()))
 		
 	def doExport(self, key, value, export):
 		return True
@@ -875,11 +928,11 @@ class Target(Build):
 		return True
 		
 	def getPath(self, owner, purpose):
-		return os.path.join(wd(), owner.context.root.directory.getContent(), owner.directory.getContent(), purpose, "targets", self.label.getContent())
+		return adjust(os.path.join(wd(), owner.context.root.directory.getContent(), owner.directory.getContent(), purpose, "targets", self.label.getContent()))
 		
 	def getFiles(self, owner):
 		result = []
-		path = os.path.join(wd(), owner.directory.getContent(), self.label.getContent())
+		path = adjust(os.path.join(wd(), owner.directory.getContent(), self.label.getContent()))
 		for root, folders, files in os.walk(path):
 			for name in files:
 				result.append(os.path.join(root, name))
@@ -887,7 +940,7 @@ class Target(Build):
 
 	def getIncludes(self, owner):
 		result = []
-		path = os.path.join(wd(), owner.directory.getContent(), self.label.getContent())
+		path = adjust(os.path.join(wd(), owner.directory.getContent(), self.label.getContent()))
 		for root, folders, files in os.walk(path):
 			result.append(root)
 		return result
@@ -1250,23 +1303,6 @@ class Context(Element):
 			self.log(self.records[i][2], self.records[i][1])
 		self.tier = None
 		self.log(None, "CONTEXT_REPORT_END\n")
-
-def flatten(output, prefix = "", suffix = ""):
-	final = ""
-	for i in range(len(output)):
-		temp = output[i]
-		final += prefix
-		for j in range(len(temp)):
-			final += temp[j]
-		final += suffix
-	return final
-
-def ensure(string):
-	if (string == None):
-		return ""
-	if not (type(string) == str):
-		return ""
-	return string
 
 def handle(context, node, tier, parents):
 	parent = parents[len(parents)-1]
@@ -1745,7 +1781,7 @@ def handle(context, node, tier, parents):
 						project = get_parent(parents, "project")
 						if not (project == None):
 							temp = handle(context, label, tier, [None])
-							output = os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "dependencies", temp[1])
+							output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "dependencies", temp[1]))
 						else:
 							context.log(node, "No \"project\" ancestor for \"label\" node!\n")
 							result = False
@@ -1760,7 +1796,7 @@ def handle(context, node, tier, parents):
 							project = get_parent(parents, "project")
 							if not (project == None):
 								temp = handle(context, label, tier, [None])
-								output = os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "targets", temp[1])
+								output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "targets", temp[1]))
 							else:
 								context.log(node, "No \"project\" ancestor for \"label\" node!\n")
 								result = False
