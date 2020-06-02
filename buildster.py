@@ -1930,7 +1930,7 @@ if (__name__ == "__main__"):
 		data = []
 		if (length > 2):
 			data = arguments[2:]
-		code = run(arguments[1], data)
+		code = run(arguments[1].strip(), data)
 		if not (code):
 			result = -1
 	sys.exit(result)
