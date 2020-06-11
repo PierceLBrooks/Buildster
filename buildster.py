@@ -117,7 +117,17 @@ def git_checkout(repo_branch):
 	command.append(repo_branch)
 	result = execute_command(command)
 	return result
-	
+
+def git_submodule():
+	command = []
+	command.append("git")
+	command.append("submodule")
+	command.append("update")
+	command.append("--init")
+	command.append("--recursive")
+	result = execute_command(command)
+	return result
+
 def cmake_configure(generator, arguments, source, path, installation):
 	length = len(arguments)
 	command = []
@@ -759,6 +769,8 @@ class GitRepoDependency(RemoteDependency):
 		cwd = os.getcwd()
 		os.chdir(path)
 		result = git_checkout(self.branch.getContent())
+		owner.context.log(self.node, result)
+		result = git_submodule()
 		owner.context.log(self.node, result)
 		os.chdir(cwd)
 		return True
