@@ -219,6 +219,9 @@ class Build(Element):
 	def doImport(self, label):
 		return True
 		
+	def getExports(self):
+		return []
+		
 	def getGenerator(self, owner):
 		name = platform.system()
 		if (name == "Windows"):
@@ -227,6 +230,9 @@ class Build(Element):
 			return "Unix Makefiles"
 		if (name == "Darwin"):
 			return "Unix Makefiles"
+		return ""
+		
+	def getLabel(self):
 		return ""
 		
 class String(Object):
@@ -545,7 +551,7 @@ class BuildInstruction(Object):
 		if (type(arguments) == ArgumentList):
 			self.arguments = arguments
 		
-	def build(self, owner, path, subpath, installation):
+	def build(self, owner, path, subpath, installation, imports):
 		return True
 		
 	def install(self, owner, path, subpath, installation):
@@ -564,7 +570,7 @@ class CmakeBuildInstruction(BuildInstruction):
 		if (type(source) == Path):
 			self.source = source
 			
-	def build(self, owner, path, subpath, installation):
+	def build(self, owner, path, subpath, installation, imports):
 		if (self.generator == None):
 			return False
 		if (self.source == None):
@@ -572,7 +578,16 @@ class CmakeBuildInstruction(BuildInstruction):
 		if (self.arguments == None):
 			return False
 		cmake = self.getPath(path, subpath)
-		result = cmake_configure(self.generator.getContent(), self.arguments.getContent()+["-DCMAKE_BUILD_WITH_INSTALL_RPATH=TRUE"], self.source.getContent(), cmake, installation)
+		arguments = self.arguments.getContent()
+		arguments.append("-DCMAKE_BUILD_WITH_INSTALL_RPATH=TRUE")
+		exports = owner.getExports(imports)
+		for i in range(len(exports)):
+			export = exports[i]
+			if (export[0] in imports):
+				export = export[1]
+				for key in export:
+					arguments.append("-D"+key+"="+export[key][1])
+		result = cmake_configure(self.generator.getContent(), arguments, self.source.getContent(), cmake, installation)
 		owner.context.log(self.node, result)
 		result = cmake_build(cmake)
 		owner.context.log(self.node, result)
@@ -624,11 +639,17 @@ class Dependency(Build):
 	def getPath(self, owner, purpose):
 		return adjust(os.path.join(wd(), owner.context.root.directory.getContent(), owner.directory.getContent(), purpose, "dependencies", self.label.getContent()))
 		
+	def getLabel(self):
+		return self.label.getContent()
+		
 	def doExport(self, key, value, export):
 		return True
 		
 	def doImport(self, label):
 		return True
+		
+	def getExports(self):
+		return []
 
 class RemoteDependency(Dependency):
 	def __init__(self, url = None):
@@ -648,6 +669,9 @@ class RemoteDependency(Dependency):
 		
 	def doImport(self, label):
 		return True
+		
+	def getExports(self):
+		return []
 
 class DependencyList(List):
 	def __init__(self):
@@ -665,6 +689,16 @@ class DependencyList(List):
 		if not (isinstance(dependency, Dependency)):
 			return False
 		return super(DependencyList, self).add(dependency)
+		
+	def getExports(self, imports):
+		exports = []
+		length = len(self.content)
+		for i in range(length):
+			if (isinstance(self.content[i], Dependency)):
+				label = self.content[i].getLabel()
+				if (label in imports):
+					exports.append([label, self.content[i].getExports()])
+		return exports
 
 class LocalDependency(Dependency):
 	def __init__(self, path = None):
@@ -701,6 +735,9 @@ class LocalDependency(Dependency):
 			return False
 		self.importsContent.append(label)
 		return True
+		
+	def getExports(self):
+		return self.exportsContent
 
 	def __str__(self):
 		return "<"+self.toString(self.subpath)+", "+self.toString(self.path)+", "+self.toString(self.instruction)+", "+self.toString(self.imports)+", "+self.toString(self.exports)+">"
@@ -786,7 +823,7 @@ class GitRepoDependency(RemoteDependency):
 			return False
 		if (self.instruction == None):
 			return False
-		success = self.instruction.build(owner, path, self.subpath.getContent(), installation)
+		success = self.instruction.build(owner, path, self.subpath.getContent(), installation, self.importsContent)
 		if not (success):
 			return False
 		success = self.instruction.install(owner, path, self.subpath.getContent(), installation)
@@ -805,6 +842,9 @@ class GitRepoDependency(RemoteDependency):
 			return False
 		self.importsContent.append(label)
 		return True
+		
+	def getExports(self):
+		return self.exportsContent
 		
 	def __str__(self):
 		return "<"+self.toString(self.subpath)+", "+self.toString(self.url)+", "+self.toString(self.branch)+", "+self.toString(self.credentials)+", "+self.toString(self.instruction)+">"
@@ -939,8 +979,14 @@ class Target(Build):
 	def doImport(self, label):
 		return True
 		
+	def getExports(self):
+		return []
+		
 	def getPath(self, owner, purpose):
 		return adjust(os.path.join(wd(), owner.context.root.directory.getContent(), owner.directory.getContent(), purpose, "targets", self.label.getContent()))
+		
+	def getLabel(self):
+		return self.label.getContent()
 		
 	def getFiles(self, owner):
 		result = []
@@ -973,6 +1019,16 @@ class TargetList(List):
 		if not (isinstance(target, Target)):
 			return False
 		return super(TargetList, self).add(target)
+		
+	def getExports(self, imports):
+		exports = []
+		length = len(self.content)
+		for i in range(length):
+			if (isinstance(self.content[i], Target)):
+				label = self.content[i].getLabel()
+				if (label in imports):
+					exports.append([label, self.content[i].getExports()])
+		return exports
 		
 class ExecutableTarget(Target):
 	def __init__(self, label = None, definitions = None, links = None, imports = None):
@@ -1052,6 +1108,14 @@ class Project(Element):
 			if not (self.targets.build(self)):
 				return False
 		return True
+		
+	def getExports(self, imports):
+		exports = []
+		if not (self.dependencies == None):
+			exports = exports+self.dependencies.getExports(imports)
+		if not (self.targets == None):
+			exports = exports+self.targets.getExports(imports)
+		return exports
 		
 	def __str__(self):
 		return "<"+self.toString(self.dependencies)+", "+self.toString(self.targets)+", "+self.toString(self.directory)+">"
