@@ -719,7 +719,7 @@ class CommandBuildInstruction(BuildInstruction):
     return True
     
   def __str__(self):
-    return "<"+self.toString(self.shells)+">"
+    return "<"+self.toString(self.string)+">"
 
 class Dependency(Build):
   def __init__(self, subpath = None, label = None, instruction = None, imports = None, exports = None):
@@ -830,15 +830,16 @@ class LocalDependency(Dependency):
     
   def build(self, owner):
     installation = self.getPath(owner, "install")
+    path = self.getPath(owner, "build")
     success = super(LocalDependency, self).build(owner)
     if not (success):
       return False
     if (self.instruction == None):
       return False
-    success = self.instruction.build(owner, self.path.getContent(), self.subpath.getContent(), installation)
+    success = self.instruction.build(owner, path, self.subpath.getContent(), installation, self.importsContent)
     if not (success):
       return False
-    success = self.instruction.install(owner, self.path.getContent(), self.subpath.getContent(), installation)
+    success = self.instruction.install(owner, path, self.subpath.getContent(), installation)
     if not (success):
       return False
     return True
@@ -1008,7 +1009,7 @@ class Target(Build):
     if not (success):
       return False
     includes = self.getIncludes(owner)
-    files = self.getFiles(owner)
+    project = self.getFiles(owner)
     builds = []
     labels = {}
     imports = {}
@@ -1058,28 +1059,46 @@ class Target(Build):
     for i in range(len(includes)):
       write(descriptor, "include_directories(\""+includes[i].replace("\\", "/")+"\")")
     for export in exports:
-      print(str(exports[export]))
       if (exports[export][1] == "headers"):
-        write(descriptor, "include_directories(\""+exports[export][0].replace("\\", "/")+"\")")
+        headers = exports[export][0].replace("\\", "/")
+        if not (os.path.isdir(headers)):
+          os.makedirs(headers)
+        for root, folders, files in os.walk(headers):
+          write(descriptor, "include_directories(\""+str(root).replace("\\", "/")+"\")")
       elif (exports[export][1] == "libraries"):
-        write(descriptor, "link_directories(\""+exports[export][0].replace("\\", "/")+"\")")
+        libraries = exports[export][0].replace("\\", "/")
+        if not (os.path.isdir(libraries)):
+          os.makedirs(libraries)
+        for root, folders, files in os.walk(libraries):
+          write(descriptor, "link_directories(\""+str(root).replace("\\", "/")+"\")")
       else:
         pass
     if not (self.links == None):
       for i in range(len(self.links.content)):
         write(descriptor, "link_libraries("+self.links.content[i].getContent()+")")
-    if (len(files) > 0):
+    if (len(project) > 0):
+      write(descriptor, "set(HEADERS )")
       write(descriptor, "set(FILES )")
-      for i in range(len(files)):
-        write(descriptor, "list(APPEND FILES \""+files[i].replace("\\", "/")+"\")")
+      for i in range(len(project)):
+        for j in range(len(owner.context.extensions)):
+          extension = "."+owner.context.extensions[j]
+          if (project[i].endswith(extension)):
+            write(descriptor, "list(APPEND FILES \""+project[i].replace("\\", "/")+"\")")
+            for k in range(len(owner.context.headers)):
+              if (extension == "."+owner.context.headers[k]):
+                write(descriptor, "list(APPEND HEADERS \""+project[i].replace("\\", "/")+"\")")
+            break
       target = str(type(self))
       if ("Executable" in target):
         write(descriptor, "add_executable("+self.label.getContent()+" ${FILES})")
       elif ("Library" in target):
         write(descriptor, "add_library("+self.label.getContent()+" ${FILES})")
+        write(descriptor, "set_target_properties("+self.label.getContent()+" PROPERTIES PUBLIC_HEADER \"${HEADERS}\")")
       else:
         pass
-    write(descriptor, "install(TARGETS "+self.label.getContent()+")")
+      write(descriptor, "install(TARGETS "+self.label.getContent()+")")
+    else:
+      print(str(len(files)))
     descriptor.close()
     generator = self.getGenerator(owner)
     arguments = []
@@ -1259,6 +1278,31 @@ class Context(Element):
   def __init__(self, data, debug = True):
     super(Context, self).__init__()
     
+    
+    self.extensions = []
+    
+    self.extensions.append("c")
+    self.extensions.append("cc")
+    self.extensions.append("cpp")
+    self.extensions.append("h")
+    self.extensions.append("hpp")
+    self.extensions.append("inl")
+    self.extensions.append("dll")
+    self.extensions.append("a")
+    self.extensions.append("lib")
+    self.extensions.append("dylib")
+    
+    self.headers = []
+    
+    self.headers.append("h")
+    self.headers.append("hpp")
+    self.headers.append("inl")
+    
+    self.sources = []
+    
+    self.sources.append("c")
+    self.sources.append("cc")
+    self.sources.append("cpp")
     
     self.conditionals = []
     
@@ -2222,7 +2266,9 @@ def run(target, data):
     return False
   output = result[1]
   elements = result[2]
-  context.build(context)
+  if not (context.build(context)):
+    context.report()
+    return False
   context.report()
   return True
 
@@ -2236,5 +2282,6 @@ if (__name__ == "__main__"):
       data = arguments[2:]
     code = run(arguments[1].strip(), data)
     if not (code):
+      print("Error!")
       result = -1
   sys.exit(result)
