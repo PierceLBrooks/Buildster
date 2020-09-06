@@ -1063,14 +1063,20 @@ class Target(Build):
         headers = exports[export][0].replace("\\", "/")
         if not (os.path.isdir(headers)):
           os.makedirs(headers)
-        for root, folders, files in os.walk(headers):
-          write(descriptor, "include_directories(\""+str(root).replace("\\", "/")+"\")")
+        write(descriptor, "include_directories(\""+headers.replace("\\", "/")+"\")")
       elif (exports[export][1] == "libraries"):
         libraries = exports[export][0].replace("\\", "/")
         if not (os.path.isdir(libraries)):
           os.makedirs(libraries)
         for root, folders, files in os.walk(libraries):
-          write(descriptor, "link_directories(\""+str(root).replace("\\", "/")+"\")")
+          for name in files:
+            for i in range(len(owner.context.libraries)):
+              if (name.endswith("."+owner.context.libraries[i])):
+                write(descriptor, "link_directories(\""+str(root).replace("\\", "/")+"\")")
+                name = None
+                break
+            if (name == None):
+              break
       else:
         pass
     if not (self.links == None):
@@ -1303,6 +1309,13 @@ class Context(Element):
     self.sources.append("c")
     self.sources.append("cc")
     self.sources.append("cpp")
+    
+    self.libraries = []
+    
+    self.libraries.append("dll")
+    self.libraries.append("a")
+    self.libraries.append("lib")
+    self.libraries.append("dylib")
     
     self.conditionals = []
     
