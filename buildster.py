@@ -698,11 +698,11 @@ class CommandBuildInstruction(BuildInstruction):
   def __init__(self, arguments = None, generator = None, source = None):
     super(CommandBuildInstruction, self).__init__(arguments)
     self.string = None
-      
+    
   def build(self, owner, path, subpath, installation, imports):
     if (self.string == None):
       return False
-    command = shlex.split(self.string.getContent())
+    command = shlex.split(self.string.getContent().replace("\\", "/"))
     owner.context.log(self.node, self.string.getContent())
     owner.context.log(self.node, str(command))
     owner.context.log(self.node, subpath)
