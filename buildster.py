@@ -102,7 +102,11 @@ def get_child(node, tag):
   
 def execute_command(command):
   print(str(command))
-  result = subprocess.check_output(command)
+  result = None
+  try:
+    result = subprocess.check_output(command)
+  except:
+    return ""
   return result.decode("UTF-8")
 
 def git_clone(repo_url, repo_path):
@@ -1008,8 +1012,9 @@ class Target(Build):
     success = super(Target, self).build(owner)
     if not (success):
       return False
-    includes = self.getIncludes(owner)
     project = self.getFiles(owner)
+    includes = self.getIncludes(owner)
+    links = []
     builds = []
     labels = {}
     imports = {}
@@ -1072,7 +1077,8 @@ class Target(Build):
           for name in files:
             for i in range(len(owner.context.libraries)):
               if (name.endswith("."+owner.context.libraries[i])):
-                write(descriptor, "link_directories(\""+str(root).replace("\\", "/")+"\")")
+                links.append(str(root).replace("\\", "/"))
+                write(descriptor, "link_directories(\""+links[len(links)-1]+"\")")
                 name = None
                 break
             if (name == None):
@@ -1081,7 +1087,18 @@ class Target(Build):
         pass
     if not (self.links == None):
       for i in range(len(self.links.content)):
-        write(descriptor, "link_libraries("+self.links.content[i].getContent()+")")
+        link = self.links.content[i].getContent().strip()
+        if ("*" in link):
+          for j in range(len(links)):
+            for root, folders, files in os.walk(links[j]):
+              for name in files:
+                if (link.replace("*", "") in name):
+                  for k in range(len(owner.context.libraries)):
+                    if (name.endswith("."+owner.context.libraries[k])):
+                      write(descriptor, "link_libraries(\""+name+"\")")
+                      break
+        else:
+          write(descriptor, "link_libraries("+link+")")
     if (len(project) > 0):
       write(descriptor, "set(HEADERS )")
       write(descriptor, "set(FILES )")
