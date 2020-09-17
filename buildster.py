@@ -411,6 +411,32 @@ class Work(Object):
     
   def __str__(self):
     return "<"+self.toString(self.string)+">"
+
+class Root(Object):
+  def __init__(self, string = None):
+    super(Root, self).__init__()
+    self.string = None
+    if (type(string) == String):
+      self.string = string
+      
+  def getContent(self):
+    return self.string.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.string)+">"
+    
+class Term(Object):
+  def __init__(self, string = None):
+    super(Term, self).__init__()
+    self.string = None
+    if (type(string) == String):
+      self.string = string
+      
+  def getContent(self):
+    return self.string.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.string)+">"
     
 class Argument(Element):
   def __init__(self, string = None):
@@ -1281,12 +1307,12 @@ class Project(Element):
   def __str__(self):
     return "<"+self.toString(self.dependencies)+", "+self.toString(self.targets)+", "+self.toString(self.directory)+">"
 
-class Root(Element):
+class Buildster(Element):
   def __init__(self, directory = None, context = None):
-    super(Root, self).__init__()
+    super(Buildster, self).__init__()
     self.directory = None
     self.context = None
-    if (type(directory) == Path):
+    if (str(type(directory)) == "Path"):
       self.directory = directory
     if (str(type(context)) == "Context"):
       self.context = context
@@ -1633,6 +1659,8 @@ def handle(context, node, tier, parents):
                 output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
               elif (child.tag == "default"):
                 output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+              elif (child.tag == "search"):
+                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
               for key in call[2]:
                 value = call[2][key]
                 if not (value == None):
@@ -1674,6 +1702,8 @@ def handle(context, node, tier, parents):
               elif (child.tag == "case"):
                 output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
               elif (child.tag == "default"):
+                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+              elif (child.tag == "search"):
                 output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
               for key in call[2]:
                 value = call[2][key]
@@ -1718,6 +1748,8 @@ def handle(context, node, tier, parents):
                 output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
               elif (child.tag == "default"):
                 output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+              elif (child.tag == "search"):
+                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
               for key in call[2]:
                 value = call[2][key]
                 if not (value == None):
@@ -1752,6 +1784,8 @@ def handle(context, node, tier, parents):
               elif (default.tag == "case"):
                 output.append([ensure(call[1]).strip(), ensure(default.tail).strip()])
               elif (default.tag == "default"):
+                output.append([ensure(call[1]).strip(), ensure(default.tail).strip()])
+              elif (default.tag == "search"):
                 output.append([ensure(call[1]).strip(), ensure(default.tail).strip()])
               for key in call[2]:
                 value = call[2][key]
@@ -1788,7 +1822,7 @@ def handle(context, node, tier, parents):
       quit = True
       result = False
     elif (tag == "buildster"):
-      element = Root()
+      element = Buildster()
       element.directory = Path(String(node.attrib["directory"]))
       context.root = element
     elif (tag == "project"):
@@ -1838,6 +1872,10 @@ def handle(context, node, tier, parents):
       element = ExportList()
     elif (tag == "imports"):
       element = ImportList()
+    elif (tag == "root"):
+      element = Root()
+    elif (tag == "term"):
+      element = Term()
     children = False
     for child in node:
       children = True
@@ -1857,6 +1895,8 @@ def handle(context, node, tier, parents):
       elif (child.tag == "case"):
         output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
       elif (child.tag == "default"):
+        output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+      elif (child.tag == "search"):
         output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
       for key in call[2]:
         value = call[2][key]
@@ -2090,6 +2130,12 @@ def handle(context, node, tier, parents):
             element.source = source
             break
           elements["source"] = None
+      elif (tag == "root"):
+        output = ensure(node.text)+flatten(output).strip()
+        element.string = String(output.strip())
+      elif (tag == "term"):
+        output = ensure(node.text)+flatten(output).strip()
+        element.string = String(output.strip())
       elif (tag == "shells"):
         if ("shell" in elements):
           for shell in elements["shell"]:
@@ -2122,7 +2168,7 @@ def handle(context, node, tier, parents):
             project = get_parent(parents, "project")
             if not (project == None):
               temp = handle(context, label, tier, [None])
-              output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "dependencies", temp[1]))
+              output = adjust(os.path.join(wd(), context.root.getContent(), project.attrib["directory"], "install", "dependencies", temp[1]))
             else:
               context.log(node, "No \"project\" ancestor for \"label\" node!\n")
               result = False
@@ -2241,6 +2287,34 @@ def handle(context, node, tier, parents):
             element.value = value
             break
           elements["value"] = None
+      elif (tag == "search"):
+        types = node.attrib["type"]
+        roots = None
+        if ("root" in elements):
+          for root in elements["root"]:
+            roots = root.getContent().strip()
+            break
+          elements["root"] = None
+        if ("term" in elements):
+          for term in elements["term"]:
+            terms = term.getContent().strip()
+            break
+          elements["term"] = None
+        if not ((roots == None) or (terms == None)):
+          output = None
+          for root, folders, files in os.walk(roots):
+            if (types == "file"):
+              for name in files:
+                if (name == terms):
+                  output = os.path.join(root, name)
+                  break
+              if not (output == None):
+                break
+          if (output == None):
+            output = ""
+          print("search "+output)
+        else:
+          output = ""
       else:
         success = False
     if (success):
@@ -2250,7 +2324,7 @@ def handle(context, node, tier, parents):
           context.projects.append(element)
           element.context = context
           context.record(node, element.toString()+"\n")
-        elif (type(element) == Root):
+        elif (type(element) == Buildster):
           context.root = element
           element.context = context
           context.record(node, element.toString()+"\n")
