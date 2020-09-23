@@ -100,43 +100,43 @@ def get_child(node, tag):
       return temp
   return None
   
-def execute_command(command):
+def execute_command(command, environment = None):
   print(str(command))
   result = None
   try:
-    result = subprocess.check_output(command)
+    result = subprocess.check_output(command, env=environment)
   except:
     return ""
   return result.decode("UTF-8")
 
-def git_clone(repo_url, repo_path):
+def git_clone(repo_url, repo_path, environment = None):
   command = []
   command.append("git")
   command.append("clone")
   command.append(repo_url)
   command.append(repo_path)
-  result = execute_command(command)
+  result = execute_command(command, environment)
   return result
   
-def git_checkout(repo_branch):
+def git_checkout(repo_branch, environment = None):
   command = []
   command.append("git")
   command.append("checkout")
   command.append(repo_branch)
-  result = execute_command(command)
+  result = execute_command(command, environment)
   return result
 
-def git_submodule():
+def git_submodule(environment = None):
   command = []
   command.append("git")
   command.append("submodule")
   command.append("update")
   command.append("--init")
   command.append("--recursive")
-  result = execute_command(command)
+  result = execute_command(command, environment)
   return result
 
-def cmake_configure(generator, arguments, source, path, installation):
+def cmake_configure(generator, arguments, source, path, installation, environment = None):
   length = len(arguments)
   command = []
   command.append("cmake")
@@ -150,26 +150,26 @@ def cmake_configure(generator, arguments, source, path, installation):
     os.makedirs(path)
   cwd = os.getcwd()
   os.chdir(path)
-  result = execute_command(command)
+  result = execute_command(command, environment)
   os.chdir(cwd)
   return result
   
-def cmake_build(path):
+def cmake_build(path, environment = None):
   command = []
   command.append("cmake")
   command.append("--build")
   command.append(path)
-  result = execute_command(command)
+  result = execute_command(command, environment)
   return result
   
-def cmake_install(path, installation):
+def cmake_install(path, installation, environment = None):
   command = []
   command.append("cmake")
   command.append("--build")
   command.append(path)
   command.append("--target")
   command.append("install")
-  result = execute_command(command)
+  result = execute_command(command, environment)
   return result
 
 class Object(object):
@@ -598,11 +598,17 @@ class ImportList(List):
     return super(ImportList, self).add(add)
     
 class BuildInstruction(Object):
-  def __init__(self, arguments = None):
+  def __init__(self, arguments = None, pre = None, post = None):
     super(BuildInstruction, self).__init__()
     self.arguments = None
     if (type(arguments) == ArgumentList):
       self.arguments = arguments
+    self.pre = None
+    if (type(pre) == PreBuildInstruction):
+      self.pre = pre
+    self.post = None
+    if (type(post) == PostBuildInstruction):
+      self.post = post
     
   def build(self, owner, path, subpath, installation, imports):
     return True
@@ -612,6 +618,64 @@ class BuildInstruction(Object):
     
   def getPath(self, path, subpath):
     return os.path.join(path, subpath)
+    
+  def getPre(self):
+    return self.pre
+  
+  def getPost(self):
+    return self.post
+    
+class PreBuildInstruction(BuildInstruction):
+  def __init__(self):
+    super(PreBuildInstruction, self).__init__()
+    self.instructions = []
+      
+  def build(self, owner, path, subpath, installation, imports):
+    length = len(self.instructions)
+    for i in range(length):
+      if (isinstance(self.instructions[i], BuildInstruction)):
+        if not (self.instructions[i].build(owner, path, subpath, installation, imports)):
+          return False
+    return True
+    
+  def install(self, owner, path, subpath, installation):
+    return True
+    
+  def __str__(self):
+    string = "<"
+    length = len(self.instructions)
+    for i in range(length):
+      string += self.toString(self.instructions[i])
+      if not (i == length-1):
+        string += ", "
+    string += ">"
+    return string
+    
+class PostBuildInstruction(BuildInstruction):
+  def __init__(self):
+    super(PostBuildInstruction, self).__init__()
+    self.instructions = []
+      
+  def build(self, owner, path, subpath, installation, imports):
+    length = len(self.instructions)
+    for i in range(length):
+      if (isinstance(self.instructions[i], BuildInstruction)):
+        if not (self.instructions[i].build(owner, path, subpath, installation, imports)):
+          return False
+    return True
+    
+  def install(self, owner, path, subpath, installation):
+    return True
+    
+  def __str__(self):
+    string = "<"
+    length = len(self.instructions)
+    for i in range(length):
+      string += self.toString(self.instructions[i])
+      if not (i == length-1):
+        string += ", "
+    string += ">"
+    return string
     
 class CmakeBuildInstruction(BuildInstruction):
   def __init__(self, arguments = None, generator = None, source = None):
@@ -632,18 +696,25 @@ class CmakeBuildInstruction(BuildInstruction):
       return False
     cmake = self.getPath(path, subpath)
     arguments = self.arguments.getContent()
-    arguments.append("-DCMAKE_BUILD_WITH_INSTALL_RPATH=TRUE")
+    arguments.append("-DCMAKE_BUILD_WITH_INSTALL_RPATH=\"TRUE\"")
     exports = owner.getExports(imports)
     for i in range(len(exports)):
       export = exports[i]
       if (export[0] in imports):
         export = export[1]
         for key in export:
-          arguments.append("-D"+key+"="+export[key][1])
+          if (export[key][0] == "other"):
+            arguments.append("-D"+key+"=\""+export[key][1].replace("\\", "/")+"\"")
+          else:
+            arguments.append("-D"+key+"="+export[key][1].replace("\\", "/"))
+    if not (self.getPre() == None):
+      self.getPre().build(owner, path, subpath, installation, imports)
     result = cmake_configure(self.generator.getContent(), arguments, self.source.getContent(), cmake, installation)
     owner.context.log(self.node, result)
     result = cmake_build(cmake)
     owner.context.log(self.node, result)
+    if not (self.getPost() == None):
+      self.getPost().build(owner, path, subpath, installation, imports)
     return True
     
   def install(self, owner, path, subpath, installation):
@@ -662,6 +733,8 @@ class ShellsBuildInstruction(BuildInstruction):
       
   def build(self, owner, path, subpath, installation, imports):
     length = len(self.shells)
+    if not (self.getPre() == None):
+      self.getPre().build(owner, path, subpath, installation, imports)
     for i in range(length):
       if ("ShellBuildInstruction" in str(type(self.shells[i]))):
         if not (self.shells[i].build(owner, path, subpath, installation, imports)):
@@ -669,6 +742,8 @@ class ShellsBuildInstruction(BuildInstruction):
       else:
         owner.context.log(self.node, str(type(self.shells[i])))
         return False
+    if not (self.getPost() == None):
+      self.getPost().build(owner, path, subpath, installation, imports)
     return True
     
   def install(self, owner, path, subpath, installation):
@@ -740,7 +815,7 @@ class CommandBuildInstruction(BuildInstruction):
       os.makedirs(subpath)
     cwd = os.getcwd()
     os.chdir(subpath)
-    result = execute_command(command)
+    result = execute_command(command, owner.context.environment)
     os.chdir(cwd)
     owner.context.log(self.node, result)
     return True
@@ -750,6 +825,29 @@ class CommandBuildInstruction(BuildInstruction):
     
   def __str__(self):
     return "<"+self.toString(self.string)+">"
+    
+class Setter(BuildInstruction):
+  def __init__(self, key = None, value = None):
+    super(Setter, self).__init__()
+    self.key = None
+    if (type(key) == Key):
+      self.key = key
+    self.value = None
+    if (type(value) == Value):
+      self.value = value
+      
+  def build(self, owner, path, subpath, installation, imports):
+    if not ((self.key == None) or (self.value == None)):
+      owner.context.environment[self.key.getContent()] = self.value.getContent()
+      owner.context.log(self.node, "<\""+self.key.getContent()+"\" -> \""+self.value.getContent()+"\">")
+      return True
+    return False
+    
+  def install(self, owner, path, subpath, installation):
+    return True
+    
+  def __str__(self):
+    return "<"+self.toString(self.key)+", "+self.toString(self.value)+">"
 
 class Dependency(Build):
   def __init__(self, subpath = None, label = None, instruction = None, imports = None, exports = None):
@@ -1366,6 +1464,15 @@ class Context(Element):
     self.conditionals.append("if_check")
     self.conditionals.append("switch")
     
+    self.nonconditionals = []
+    self.nonconditionals.append("data")
+    self.nonconditionals.append("install")
+    self.nonconditionals.append("origin")
+    self.nonconditionals.append("case")
+    self.nonconditionals.append("default")
+    self.nonconditionals.append("search")
+    self.nonconditionals.append("set")
+    
     self.processes = []
     
     self.processes.append("message")
@@ -1429,6 +1536,9 @@ class Context(Element):
     nodeTags.append("command")
     nodeTags.append("search")
     nodeTags.append("term")
+    nodeTags.append("set")
+    nodeTags.append("pre")
+    nodeTags.append("post")
     
     nodeParents = {}
     nodeAttributes = {}
@@ -1445,6 +1555,7 @@ class Context(Element):
       nodeParents[tag] = parents
       nodeAttributes[tag] = attributes
     
+    nodeParents["set"].append(self.any)
     nodeParents["search"].append(self.any)
     nodeParents["origin"].append(self.any)
     nodeParents["install"].append(self.any)
@@ -1481,13 +1592,18 @@ class Context(Element):
     nodeParents["value"].append("definition")
     nodeParents["key"].append("export")
     nodeParents["value"].append("export")
+    nodeParents["key"].append("set")
+    nodeParents["value"].append("set")
     nodeParents["links"].append("target")
     nodeParents["link"].append("links")
+    nodeParents["build"].append("pre")
+    nodeParents["build"].append("post")
     nodeParents["build"].append("dependency")
     nodeParents["arguments"].append("build")
     nodeParents["argument"].append("arguments")
     nodeParents["cmake"].append("build")
     nodeParents["generator"].append("cmake")
+    nodeParents["generator"].append("target")
     nodeParents["source"].append("cmake")
     nodeParents["exports"].append("dependency")
     nodeParents["exports"].append("target")
@@ -1502,6 +1618,8 @@ class Context(Element):
     nodeParents["shell"].append("shells")
     nodeParents["commands"].append("shell")
     nodeParents["command"].append("commands")
+    nodeParents["pre"].append("build")
+    nodeParents["post"].append("build")
     
     nodeAttributes["data"].append("id")
     nodeAttributes["if"].append("id")
@@ -1538,11 +1656,14 @@ class Context(Element):
     self.records = []
     self.projects = []
     self.labels = []
+    self.environment = os.environ.copy()
     
     if not ("BUILDSTER_WD" in self.data):
       self.data["BUILDSTER_WD"] = wd()
     if not ("BUILDSTER_OS" in self.data):
       self.data["BUILDSTER_OS"] = platform.system()
+      if (("msys" in self.data["BUILDSTER_OS"].lower()) or ("cygwin" in self.data["BUILDSTER_OS"].lower())):
+        self.data["BUILDSTER_OS"] = "Windows"
     
   def build(self, owner):
     self.tier = None
@@ -1649,17 +1770,7 @@ def handle(context, node, tier, parents):
                 break
               if (child.tag in context.conditionals):
                 output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "data"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "install"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "origin"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "case"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "default"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "search"):
+              elif (child.tag in context.nonconditionals):
                 output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
               for key in call[2]:
                 value = call[2][key]
@@ -1693,17 +1804,7 @@ def handle(context, node, tier, parents):
                 break
               if (child.tag in context.conditionals):
                 output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "data"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "install"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "origin"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "case"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "default"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "search"):
+              elif (child.tag in context.nonconditionals):
                 output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
               for key in call[2]:
                 value = call[2][key]
@@ -1738,17 +1839,7 @@ def handle(context, node, tier, parents):
                 break
               if (child.tag in context.conditionals):
                 output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "data"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "install"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "origin"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "case"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "default"):
-                output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-              elif (child.tag == "search"):
+              elif (child.tag in context.nonconditionals):
                 output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
               for key in call[2]:
                 value = call[2][key]
@@ -1775,17 +1866,7 @@ def handle(context, node, tier, parents):
             else:
               if (default.tag in context.conditionals):
                 output.append([ensure(call[1]).strip(), ensure(default.tail).strip()])
-              elif (default.tag == "data"):
-                output.append([ensure(call[1]).strip(), ensure(default.tail).strip()])
-              elif (default.tag == "install"):
-                output.append([ensure(call[1]).strip(), ensure(default.tail).strip()])
-              elif (default.tag == "origin"):
-                output.append([ensure(call[1]).strip(), ensure(default.tail).strip()])
-              elif (default.tag == "case"):
-                output.append([ensure(call[1]).strip(), ensure(default.tail).strip()])
-              elif (default.tag == "default"):
-                output.append([ensure(call[1]).strip(), ensure(default.tail).strip()])
-              elif (default.tag == "search"):
+              elif (default.tag in context.nonconditionals):
                 output.append([ensure(call[1]).strip(), ensure(default.tail).strip()])
               for key in call[2]:
                 value = call[2][key]
@@ -1846,6 +1927,10 @@ def handle(context, node, tier, parents):
         element = LibraryTarget()
       else:
         pass
+    elif (tag == "pre"):
+      element = PreBuildInstruction()
+    elif (tag == "post"):
+      element = PostBuildInstruction()
     elif (tag == "build"):
       element = BuildInstruction()
     elif (tag == "arguments"):
@@ -1886,17 +1971,7 @@ def handle(context, node, tier, parents):
         break
       if (child.tag in context.conditionals):
         output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-      elif (child.tag == "data"):
-        output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-      elif (child.tag == "install"):
-        output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-      elif (child.tag == "origin"):
-        output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-      elif (child.tag == "case"):
-        output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-      elif (child.tag == "default"):
-        output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-      elif (child.tag == "search"):
+      elif (child.tag in context.nonconditionals):
         output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
       for key in call[2]:
         value = call[2][key]
@@ -2119,6 +2194,16 @@ def handle(context, node, tier, parents):
             element.arguments = arguments
             break
           elements["arguments"] = None
+        if ("pre" in elements):
+          for pre in elements["pre"]:
+            element.pre = pre
+            break
+          elements["pre"] = None
+        if ("post" in elements):
+          for post in elements["post"]:
+            element.post = post
+            break
+          elements["post"] = None
       elif (tag == "cmake"):
         if ("generator" in elements):
           for generator in elements["generator"]:
@@ -2230,6 +2315,28 @@ def handle(context, node, tier, parents):
         output = ensure(node.text)+flatten(output).strip()
         output = output.strip()
         context.log(node, output+"\n")
+      elif (tag == "set"):
+        element = Setter()
+        if ("key" in elements):
+          for key in elements["key"]:
+            element.key = key
+            break
+          elements["key"] = None
+        if ("value" in elements):
+          for value in elements["value"]:
+            element.value = value
+            break
+          elements["value"] = None
+      elif (tag == "pre"):
+        element = PreBuildInstruction()
+        for key in elements:
+          for value in elements[key]:
+            element.instructions.append(value)
+      elif (tag == "post"):
+        element = PostBuildInstruction()
+        for key in elements:
+          for value in elements[key]:
+            element.instructions.append(value)
       else:
         success = False
     else:
@@ -2312,7 +2419,6 @@ def handle(context, node, tier, parents):
                 break
           if (output == None):
             output = ""
-          print("search "+output)
         else:
           output = ""
       else:
