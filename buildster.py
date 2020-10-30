@@ -1098,7 +1098,7 @@ class GitRepoDependency(RemoteDependency):
     return "<"+self.toString(self.subpath)+", "+self.toString(self.url)+", "+self.toString(self.branch)+", "+self.toString(self.credentials)+", "+self.toString(self.instruction)+">"
     
 class Target(Build):
-  def __init__(self, label = None, definitions = None, links = None, imports = None, exports = None):
+  def __init__(self, label = None, definitions = None, links = None, imports = None, exports = None, generator = None):
     super(Target, self).__init__()
     self.label = None
     if (type(label) == Label):
@@ -1115,6 +1115,9 @@ class Target(Build):
     self.exports = None
     if (type(exports) == ExportList):
       self.exports = exports
+    self.generator = None
+    if (type(generator) == Generator):
+      self.generator = generator
       
   def install(self, owner, path, installation):
     result = cmake_install(path, installation)
@@ -1247,7 +1250,13 @@ class Target(Build):
     else:
       print(str(len(files)))
     descriptor.close()
-    generator = self.getGenerator(owner)
+    generator = None
+    if (self.generator == None):
+      generator = self.getGenerator(owner)
+    else:
+      generator = self.generator.getContent()
+    if (generator == None):
+      return False
     arguments = []
     result = cmake_configure(generator, arguments, path, os.path.join(path, "build"), installation)
     owner.context.log(self.node, result)
@@ -2381,6 +2390,11 @@ def handle(context, node, tier, parents):
             element.exports = exports
             break
           elements["exports"] = None
+        if ("generator" in elements):
+          for generator in elements["generator"]:
+            element.generator = generator
+            break
+          elements["generator"] = None
         context.log(node, element.toString()+"\n")
       elif (tag == "export"):
         element.export = String(node.attrib["type"])
