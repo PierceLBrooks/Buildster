@@ -48,6 +48,9 @@ def split(path):
     if (result[i].endswith(":")):
       result[i] = result[i]+"\\"
   return result
+  
+def relativize(base, leaf):
+  return os.path.relpath(leaf, base).replace("\\", "/")
 
 def adjust(path):
   paths = split(path)
@@ -1188,14 +1191,15 @@ class Target(Build):
     write(descriptor, "set(CMAKE_EXE_LINKER_FLAGS \"${CMAKE_EXE_LINKER_FLAGS} -std=c++14\")")
     write(descriptor, "set(CMAKE_SHARED_LINKER_FLAGS \"${CMAKE_SHARED_LINKER_FLAGS} -std=c++14\")")
     write(descriptor, "project(\""+self.label.getContent()+"Project\")")
+    base = path
     for i in range(len(includes)):
-      write(descriptor, "include_directories(\""+includes[i].replace("\\", "/")+"\")")
+      write(descriptor, "include_directories(\""+relativize(base, includes[i].replace("\\", "/"))+"\")")
     for export in exports:
       if (exports[export][1] == "headers"):
         headers = exports[export][0].replace("\\", "/")
         if not (os.path.isdir(headers)):
           os.makedirs(headers)
-        write(descriptor, "include_directories(\""+headers.replace("\\", "/")+"\")")
+        write(descriptor, "include_directories(\""+relativize(base, headers.replace("\\", "/"))+"\")")
       elif (exports[export][1] == "libraries"):
         libraries = exports[export][0].replace("\\", "/")
         if not (os.path.isdir(libraries)):
@@ -1205,7 +1209,7 @@ class Target(Build):
             for i in range(len(owner.context.libraries)):
               if (name.endswith("."+owner.context.libraries[i])):
                 links.append(str(root).replace("\\", "/"))
-                write(descriptor, "link_directories(\""+links[len(links)-1]+"\")")
+                write(descriptor, "link_directories(\""+relativize(base, links[len(links)-1])+"\")")
                 name = None
                 break
             if (name == None):
@@ -1233,10 +1237,10 @@ class Target(Build):
         for j in range(len(owner.context.extensions)):
           extension = "."+owner.context.extensions[j]
           if (project[i].endswith(extension)):
-            write(descriptor, "list(APPEND FILES \""+project[i].replace("\\", "/")+"\")")
+            write(descriptor, "list(APPEND FILES \""+relativize(base, project[i].replace("\\", "/"))+"\")")
             for k in range(len(owner.context.headers)):
               if (extension == "."+owner.context.headers[k]):
-                write(descriptor, "list(APPEND HEADERS \""+project[i].replace("\\", "/")+"\")")
+                write(descriptor, "list(APPEND HEADERS \""+relativize(base, project[i].replace("\\", "/"))+"\")")
             break
       target = str(type(self))
       if ("Executable" in target):
