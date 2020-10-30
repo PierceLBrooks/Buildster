@@ -4,6 +4,7 @@
 import os
 import sys
 import shlex
+import shutil
 import inspect
 import platform
 import subprocess
@@ -51,6 +52,26 @@ def split(path):
   
 def relativize(base, leaf):
   return os.path.relpath(leaf, base).replace("\\", "/")
+  
+def find(base, leaf):
+  if not (os.path.isdir(base)):
+    return None
+  for root, folders, files in os.walk(base):
+    for name in files:
+      if (len(name) > len(leaf)):
+        if (name.startswith(leaf)):
+          if (name[len(leaf)] == '.'):
+            return os.path.join(root, name)
+      else:
+        if (len(name) == len(leaf)):
+          return os.path.join(root, name)
+  return None
+
+def copy(source, destination):
+  if (os.path.exists(destination)):
+    return False
+  shutil.copyfile(source, destination)
+  return True
 
 def adjust(path):
   paths = split(path)
@@ -200,6 +221,9 @@ class Element(Object):
     self.parent = None
     
   def build(self, owner):
+    return True
+    
+  def distribute(self, owner, distribution):
     return True
     
   def getParent(self):
@@ -886,6 +910,20 @@ class Dependency(Build):
       return False
     return True
     
+  def distribute(self, owner, distribution):
+    exports = self.getExports()
+    if not (type(exports) == dict):
+      return False
+    for key in exports:
+      export = exports[key]
+      if (export[0] == "libraries"):
+        if (os.path.isdir(export[1])):
+          for root, folders, files in os.walk(export[1]):
+            for name in files:
+              if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, name).replace("\\", "/"))):
+                return False
+    return True
+    
   def getPath(self, owner, purpose):
     return adjust(os.path.join(wd(), owner.context.root.directory.getContent(), owner.directory.getContent(), purpose, "dependencies", self.label.getContent()))
     
@@ -932,6 +970,14 @@ class DependencyList(List):
     for i in range(length):
       if (isinstance(self.content[i], Dependency)):
         if not (self.content[i].build(owner)):
+          return False
+    return True
+    
+  def distribute(self, owner, distribution):
+    length = len(self.content)
+    for i in range(length):
+      if (isinstance(self.content[i], Dependency)):
+        if not (self.content[i].distribute(owner, distribution)):
           return False
     return True
         
@@ -1270,6 +1316,14 @@ class Target(Build):
     if not (success):
       return False
     return True
+    
+  def distribute(self, owner, distribution):
+    installation = find(self.getPath(owner, "install"), self.label.getContent())
+    if (installation == None):
+      return False
+    if not (copy(installation.replace("\\", "/"), os.path.join(distribution, os.path.basename(installation)).replace("\\", "/"))):
+      return False
+    return True
 
   def doExport(self, key, value, export):
     return True
@@ -1310,6 +1364,14 @@ class TargetList(List):
     for i in range(length):
       if (isinstance(self.content[i], Target)):
         if not (self.content[i].build(owner)):
+          return False
+    return True
+    
+  def distribute(self, owner, distribution):
+    length = len(self.content)
+    for i in range(length):
+      if (isinstance(self.content[i], Target)):
+        if not (self.content[i].distribute(owner, distribution)):
           return False
     return True
         
@@ -1407,6 +1469,18 @@ class Project(Element):
         return False
     return True
     
+  def distribute(self, owner, distribution):
+    if (os.path.isdir(distribution)):
+      shutil.rmtree(distribution)
+    os.makedirs(distribution)
+    if not (self.dependencies == None):
+      if not (self.dependencies.distribute(self, distribution)):
+        return False
+    if not (self.targets == None):
+      if not (self.targets.distribute(self, distribution)):
+        return False
+    return True
+    
   def getExports(self, imports):
     exports = []
     if not (self.dependencies == None):
@@ -1419,12 +1493,15 @@ class Project(Element):
     return "<"+self.toString(self.dependencies)+", "+self.toString(self.targets)+", "+self.toString(self.directory)+">"
 
 class Buildster(Element):
-  def __init__(self, directory = None, context = None):
+  def __init__(self, directory = None, distribution = None, context = None):
     super(Buildster, self).__init__()
     self.directory = None
+    self.distribution = None
     self.context = None
     if (str(type(directory)) == "Path"):
       self.directory = directory
+    if (str(type(distribution)) == "Path"):
+      self.distribution = distribution
     if (str(type(context)) == "Context"):
       self.context = context
       
@@ -1432,7 +1509,7 @@ class Buildster(Element):
     return True
     
   def __str__(self):
-    return "<"+self.toString(self.directory)+">"
+    return "<"+self.toString(self.directory)+", "+self.toString(self.distribution)+">"
 
 class Context(Element):
   def __init__(self, data, debug = True):
@@ -1690,6 +1767,18 @@ class Context(Element):
     self.log(self.node, "CONTEXT_BUILD_END\n")
     return True
     
+  def distribute(self, owner, distribution):
+    self.tier = None
+    self.log(self.node, "CONTEXT_DISTRIBUTE_BEGIN\n")
+    for i in range(len(self.projects)):
+      if not (self.projects[i].distribute(self, os.path.join(wd(), self.root.directory.getContent(), distribution).replace("\\", "/"))):
+        self.tier = None
+        self.log(self.node, "CONTEXT_DISTRIBUTE_END\n")
+        return False
+    self.tier = None
+    self.log(self.node, "CONTEXT_DISTRIBUTE_END\n")
+    return True
+    
   def check(self, node, parent):
     tag = node.tag
     if (tag == "label"):
@@ -1737,9 +1826,9 @@ class Context(Element):
       return
     print(tag+now.strftime("%d-%m-%Y@%H:%M:%S")+"\n")
     if (self.tier == None):
-      print("\""+str(message)+"\"\n")
+      print("\""+str(message.strip())+"\"\n")
       return
-    print(("  "*self.tier)+str(self.tier)+": \""+str(message)+"\"")
+    print(("  "*self.tier)+str(self.tier)+": \""+str(message.strip())+"\"")
   
   def record(self, node, message):
     self.records.append([self.tier, message, node])
@@ -1918,6 +2007,7 @@ def handle(context, node, tier, parents):
     elif (tag == "buildster"):
       element = Buildster()
       element.directory = Path(String(node.attrib["directory"]))
+      element.distribution = Path(String(node.attrib["distribution"]))
       context.root = element
     elif (tag == "project"):
       element = Project()
@@ -2495,6 +2585,9 @@ def run(target, data):
   output = result[1]
   elements = result[2]
   if not (context.build(context)):
+    context.report()
+    return False
+  if not (context.distribute(context, context.root.distribution.getContent())):
     context.report()
     return False
   context.report()
