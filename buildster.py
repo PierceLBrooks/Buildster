@@ -160,7 +160,7 @@ def git_submodule(environment = None):
   result = execute_command(command, environment)
   return result
 
-def cmake_configure(generator, arguments, source, path, installation, environment = None):
+def cmake_configure(generator, arguments, source, path, installation, variant, environment = None):
   length = len(arguments)
   command = []
   command.append("cmake")
@@ -168,7 +168,7 @@ def cmake_configure(generator, arguments, source, path, installation, environmen
   command.append(generator)
   for i in range(length):
     command.append(arguments[i])
-  command.append("-DCMAKE_INSTALL_PREFIX="+installation)
+  command.append("-DCMAKE_INSTALL_PREFIX="+os.path.join(installation, variant.lower()).replace("\\", "/"))
   command.append(source)
   if not (os.path.isdir(path)):
     os.makedirs(path)
@@ -736,17 +736,32 @@ class CmakeBuildInstruction(BuildInstruction):
             arguments.append("-D"+key+"="+export[key][1].replace("\\", "/"))
     if not (self.getPre() == None):
       self.getPre().build(owner, path, subpath, installation, imports)
-    result = cmake_configure(self.generator.getContent(), arguments, self.source.getContent(), cmake, installation)
-    owner.context.log(self.node, result)
-    result = cmake_build(cmake)
-    owner.context.log(self.node, result)
+    if not (self.buildVariant(owner, arguments, cmake, installation, "Debug")):
+      return False
+    if not (self.buildVariant(owner, arguments, cmake, installation, "Release")):
+      return False
     if not (self.getPost() == None):
       self.getPost().build(owner, path, subpath, installation, imports)
+    return True
+
+  def buildVariant(self, owner, arguments, cmake, installation, variant):
+    path = os.path.join(cmake, variant.lower()).replace("\\", "/")
+    result = cmake_configure(self.generator.getContent(), arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, "..", self.source.getContent()).replace("\\", "/"), path, installation, variant)
+    owner.context.log(self.node, result)
+    result = cmake_build(os.path.join(cmake, variant.lower()).replace("\\", "/"))
+    owner.context.log(self.node, result)
     return True
     
   def install(self, owner, path, subpath, installation):
     cmake = self.getPath(path, subpath)
-    result = cmake_install(cmake, installation)
+    if not (self.installVariant(owner, cmake, installation, "Debug")):
+      return False
+    if not (self.installVariant(owner, cmake, installation, "Release")):
+      return False
+    return True
+
+  def installVariant(self, owner, cmake, installation, variant):
+    result = cmake_install(os.path.join(cmake, variant.lower()).replace("\\", "/"), os.path.join(installation, variant.lower()).replace("\\", "/"))
     owner.context.log(self.node, result)
     return True
     
@@ -1308,14 +1323,21 @@ class Target(Build):
     if (generator == None):
       return False
     arguments = []
-    result = cmake_configure(generator, arguments, path, os.path.join(path, "build"), installation)
-    owner.context.log(self.node, result)
-    result = cmake_build(os.path.join(path, "build"))
-    owner.context.log(self.node, result)
-    success = self.install(owner, os.path.join(path, "build"), installation)
+    success = self.buildVariant(owner, generator, arguments, path, installation, "Debug")
+    if not (success):
+      return False
+    success = self.buildVariant(owner, generator, arguments, path, installation, "Release")
     if not (success):
       return False
     return True
+
+  def buildVariant(self, owner, generator, arguments, path, installation, variant):
+    result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build", variant.lower()).replace("\\", "/"), installation, variant)
+    owner.context.log(self.node, result)
+    result = cmake_build(os.path.join(path, "build", variant.lower()).replace("\\", "/"))
+    owner.context.log(self.node, result)
+    success = self.install(owner, os.path.join(path, "build", variant.lower()).replace("\\", "/"), os.path.join(installation, variant.lower()).replace("\\", "/"))
+    return success
     
   def distribute(self, owner, distribution):
     installation = find(self.getPath(owner, "install"), self.label.getContent())
@@ -1515,7 +1537,10 @@ class Context(Element):
   def __init__(self, data, debug = True):
     super(Context, self).__init__()
     
-    
+
+    self.variant = "Debug"
+
+
     self.extensions = []
     
     self.extensions.append("c")
@@ -2356,7 +2381,7 @@ def handle(context, node, tier, parents):
             project = get_parent(parents, "project")
             if not (project == None):
               temp = handle(context, label, tier, [None])
-              output = adjust(os.path.join(wd(), context.root.getContent(), project.attrib["directory"], "install", "dependencies", temp[1]))
+              output = adjust(os.path.join(wd(), context.root.getContent(), project.attrib["directory"], "install", "dependencies", temp[1], context.variant.lower()))
             else:
               context.log(node, "No \"project\" ancestor for \"label\" node!\n")
               result = False
@@ -2371,7 +2396,7 @@ def handle(context, node, tier, parents):
               project = get_parent(parents, "project")
               if not (project == None):
                 temp = handle(context, label, tier, [None])
-                output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "targets", temp[1]))
+                output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "targets", temp[1], context.variant.lower()))
               else:
                 context.log(node, "No \"project\" ancestor for \"label\" node!\n")
                 result = False
