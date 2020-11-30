@@ -1223,8 +1223,6 @@ class Target(Build):
     success = super(Target, self).build(owner, variant)
     if not (success):
       return False
-    project = self.getFiles(owner)
-    includes = self.getIncludes(owner)
     links = []
     builds = []
     labels = {}
@@ -1269,6 +1267,8 @@ class Target(Build):
       return False
     if not (os.path.isdir(path)):
       os.makedirs(path)
+    project = self.getFiles(owner)
+    includes = self.getIncludes(owner)
     descriptor = open(os.path.join(path, "CMakeLists.txt"), "w")
     write(descriptor, "cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)")
     write(descriptor, "set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)")
@@ -1316,6 +1316,7 @@ class Target(Build):
         else:
           write(descriptor, "link_libraries("+link+")")
     if (len(project) > 0):
+      target = str(type(self))
       write(descriptor, "set(HEADERS )")
       write(descriptor, "set(FILES )")
       for i in range(len(project)):
@@ -1323,11 +1324,11 @@ class Target(Build):
           extension = "."+owner.context.extensions[j]
           if (project[i].endswith(extension)):
             write(descriptor, "list(APPEND FILES \""+relativize(base, project[i].replace("\\", "/"))+"\")")
-            for k in range(len(owner.context.headers)):
-              if (extension == "."+owner.context.headers[k]):
-                write(descriptor, "list(APPEND HEADERS \""+relativize(base, project[i].replace("\\", "/"))+"\")")
+            if ("Library" in target):
+              for k in range(len(owner.context.headers)):
+                if (extension == "."+owner.context.headers[k]):
+                  write(descriptor, "list(APPEND HEADERS \""+relativize(base, project[i].replace("\\", "/"))+"\")")
             break
-      target = str(type(self))
       if ("Executable" in target):
         write(descriptor, "add_executable("+self.label.getContent()+" ${FILES})")
       elif ("Library" in target):
@@ -1338,6 +1339,7 @@ class Target(Build):
       write(descriptor, "install(TARGETS "+self.label.getContent()+")")
     else:
       print(str(len(files)))
+      return False
     descriptor.close()
     generator = None
     if (self.generator == None):
