@@ -220,10 +220,10 @@ class Element(Object):
     super(Element, self).__init__()
     self.parent = None
     
-  def build(self, owner):
+  def build(self, owner, variant):
     return True
     
-  def distribute(self, owner, distribution):
+  def distribute(self, owner, distribution, variant):
     return True
     
   def getParent(self):
@@ -233,34 +233,34 @@ class Build(Element):
   def __init(self):
     super(Build, self).__init__()
     
-  def build(self, owner):
+  def build(self, owner, variant):
     owner.context.record(self.node, str(self.importsContent))
     owner.context.record(self.node, str(self.exportsContent))
     return True
     
-  def addExport(self, add):
+  def addExport(self, add, variant):
     if not (isinstance(add, Export)):
       return False
-    success = self.doExport(add.key.getContent(), add.value.getContent(), add.export.getContent())
+    success = self.doExport(add.key.getContent(), add.value.getContent(), add.export.getContent(), variant)
     if not (success):
       return False
     return True
     
-  def addImport(self, add):
+  def addImport(self, add, variant):
     if not (isinstance(add, Import)):
       return False
-    success = self.doImport(add.getContent())
+    success = self.doImport(add.getContent(), variant)
     if not (success):
       return False
     return True
     
-  def doExport(self, key, value, export):
+  def doExport(self, key, value, export, variant):
     return True
     
-  def doImport(self, label):
+  def doImport(self, label, variant):
     return True
     
-  def getExports(self):
+  def getExports(self, variant):
     return []
     
   def getGenerator(self, owner):
@@ -296,7 +296,7 @@ class List(Element):
     if (type(content) == list):
       self.content = content
       
-  def build(self, owner):
+  def build(self, owner, variant):
     return True
     
   def add(self, content):
@@ -472,7 +472,7 @@ class Argument(Element):
     if (type(string) == String):
       self.string = string
       
-  def build(self, owner):
+  def build(self, owner, variant):
     return True
     
   def getContent(self):
@@ -485,7 +485,7 @@ class ArgumentList(List):
   def __init__(self):
     super(ArgumentList, self).__init__()
     
-  def build(self, owner):
+  def build(self, owner, variant):
     return True
         
   def addArgument(self, argument):
@@ -510,7 +510,7 @@ class DefinitionList(List):
   def __init__(self):
     super(DefinitionList, self).__init__()
     
-  def build(self, owner):
+  def build(self, owner, variant):
     return True
         
   def addDefinition(self, definition):
@@ -535,7 +535,7 @@ class LinkList(List):
   def __init__(self):
     super(LinkList, self).__init__()
     
-  def build(self, owner):
+  def build(self, owner, variant):
     return True
         
   def addLink(self, link):
@@ -556,10 +556,10 @@ class Export(Object):
     if (type(export) == String):
       self.export = export
       
-  def doExport(self, owner):
+  def doExport(self, owner, variant):
     if not (isinstance(owner, Build)):
       return False
-    owner.addExport(self)
+    owner.addExport(self, variant)
     return True
       
   def __str__(self):
@@ -569,14 +569,14 @@ class ExportList(List):
   def __init__(self):
     super(ExportList, self).__init__()
     
-  def build(self, owner):
+  def build(self, owner, variant):
     return True
 
-  def doExport(self, owner):
+  def doExport(self, owner, variant):
     length = len(self.content)
     for i in range(length):
       if (isinstance(self.content[i], Export)):
-        if not (self.content[i].doExport(owner)):
+        if not (self.content[i].doExport(owner, variant)):
           return False
     return True
 
@@ -595,10 +595,10 @@ class Import(Object):
   def getContent(self):
     return self.label.getContent()
     
-  def doImport(self, owner):
+  def doImport(self, owner, variant):
     if not (isinstance(owner, Build)):
       return False
-    owner.addImport(self)
+    owner.addImport(self, variant)
     return True
     
   def __str__(self):
@@ -608,14 +608,14 @@ class ImportList(List):
   def __init__(self):
     super(ImportList, self).__init__()
     
-  def build(self, owner):
+  def build(self, owner, variant):
     return True
 
-  def doImport(self, owner):
+  def doImport(self, owner, variant):
     length = len(self.content)
     for i in range(length):
       if (isinstance(self.content[i], Import)):
-        if not (self.content[i].doImport(owner)):
+        if not (self.content[i].doImport(owner, variant)):
           return False
     return True
 
@@ -637,10 +637,10 @@ class BuildInstruction(Object):
     if (type(post) == PostBuildInstruction):
       self.post = post
     
-  def build(self, owner, path, subpath, installation, imports):
+  def build(self, owner, path, subpath, installation, imports, variant):
     return True
     
-  def install(self, owner, path, subpath, installation):
+  def install(self, owner, path, subpath, installation, variant):
     return True
     
   def getPath(self, path, subpath):
@@ -657,15 +657,15 @@ class PreBuildInstruction(BuildInstruction):
     super(PreBuildInstruction, self).__init__()
     self.instructions = []
       
-  def build(self, owner, path, subpath, installation, imports):
+  def build(self, owner, path, subpath, installation, imports, variant):
     length = len(self.instructions)
     for i in range(length):
       if (isinstance(self.instructions[i], BuildInstruction)):
-        if not (self.instructions[i].build(owner, path, subpath, installation, imports)):
+        if not (self.instructions[i].build(owner, path, subpath, installation, imports, variant)):
           return False
     return True
     
-  def install(self, owner, path, subpath, installation):
+  def install(self, owner, path, subpath, installation, variant):
     return True
     
   def __str__(self):
@@ -683,15 +683,15 @@ class PostBuildInstruction(BuildInstruction):
     super(PostBuildInstruction, self).__init__()
     self.instructions = []
       
-  def build(self, owner, path, subpath, installation, imports):
+  def build(self, owner, path, subpath, installation, imports, variant):
     length = len(self.instructions)
     for i in range(length):
       if (isinstance(self.instructions[i], BuildInstruction)):
-        if not (self.instructions[i].build(owner, path, subpath, installation, imports)):
+        if not (self.instructions[i].build(owner, path, subpath, installation, imports, variant)):
           return False
     return True
     
-  def install(self, owner, path, subpath, installation):
+  def install(self, owner, path, subpath, installation, variant):
     return True
     
   def __str__(self):
@@ -714,7 +714,7 @@ class CmakeBuildInstruction(BuildInstruction):
     if (type(source) == Path):
       self.source = source
       
-  def build(self, owner, path, subpath, installation, imports):
+  def build(self, owner, path, subpath, installation, imports, variant):
     if (self.generator == None):
       return False
     if (self.source == None):
@@ -724,7 +724,7 @@ class CmakeBuildInstruction(BuildInstruction):
     cmake = self.getPath(path, subpath)
     arguments = self.arguments.getContent()
     arguments.append("-DCMAKE_BUILD_WITH_INSTALL_RPATH=\"TRUE\"")
-    exports = owner.getExports(imports)
+    exports = owner.getExports(imports, variant)
     for i in range(len(exports)):
       export = exports[i]
       if (export[0] in imports):
@@ -735,13 +735,13 @@ class CmakeBuildInstruction(BuildInstruction):
           else:
             arguments.append("-D"+key+"="+export[key][1].replace("\\", "/"))
     if not (self.getPre() == None):
-      self.getPre().build(owner, path, subpath, installation, imports)
-    if not (self.buildVariant(owner, arguments, cmake, installation, "Debug")):
-      return False
-    if not (self.buildVariant(owner, arguments, cmake, installation, "Release")):
+      if not (self.getPre().build(owner, path, subpath, installation, imports, variant)):
+        return False
+    if not (self.buildVariant(owner, arguments, cmake, installation, variant)):
       return False
     if not (self.getPost() == None):
-      self.getPost().build(owner, path, subpath, installation, imports)
+      if not (self.getPost().build(owner, path, subpath, installation, imports, variant)):
+        return False
     return True
 
   def buildVariant(self, owner, arguments, cmake, installation, variant):
@@ -752,11 +752,9 @@ class CmakeBuildInstruction(BuildInstruction):
     owner.context.log(self.node, result)
     return True
     
-  def install(self, owner, path, subpath, installation):
+  def install(self, owner, path, subpath, installation, variant):
     cmake = self.getPath(path, subpath)
-    if not (self.installVariant(owner, cmake, installation, "Debug")):
-      return False
-    if not (self.installVariant(owner, cmake, installation, "Release")):
+    if not (self.installVariant(owner, cmake, installation, variant)):
       return False
     return True
 
@@ -773,22 +771,25 @@ class ShellsBuildInstruction(BuildInstruction):
     super(ShellsBuildInstruction, self).__init__(arguments)
     self.shells = []
       
-  def build(self, owner, path, subpath, installation, imports):
+  def build(self, owner, path, subpath, installation, imports, variant):
     length = len(self.shells)
     if not (self.getPre() == None):
-      self.getPre().build(owner, path, subpath, installation, imports)
+      if not (self.getPre().build(owner, path, subpath, installation, imports, variant)):
+        return False
     for i in range(length):
       if ("ShellBuildInstruction" in str(type(self.shells[i]))):
-        if not (self.shells[i].build(owner, path, subpath, installation, imports)):
+        if not (self.shells[i].build(owner, path, subpath, installation, imports, variant)):
+          print("shell")
           return False
       else:
         owner.context.log(self.node, str(type(self.shells[i])))
         return False
     if not (self.getPost() == None):
-      self.getPost().build(owner, path, subpath, installation, imports)
+      if not (self.getPost().build(owner, path, subpath, installation, imports, variant)):
+        return False
     return True
     
-  def install(self, owner, path, subpath, installation):
+  def install(self, owner, path, subpath, installation, variant):
     return True
     
   def __str__(self):
@@ -800,7 +801,7 @@ class ShellBuildInstruction(BuildInstruction):
     self.commands = None
     self.work = None
       
-  def build(self, owner, path, subpath, installation, imports):
+  def build(self, owner, path, subpath, installation, imports, variant):
     if (self.commands == None):
       return False
     if not ("CommandsBuildInstruction" in str(type(self.commands))):
@@ -809,11 +810,11 @@ class ShellBuildInstruction(BuildInstruction):
       return False
     if not ("Work" in str(type(self.work))):
       return False
-    if not (self.commands.build(owner, self.getPath(path, subpath), self.work.getContent(), installation, imports)):
+    if not (self.commands.build(owner, self.getPath(path, subpath), self.work.getContent(), installation, imports, variant)):
       return False
     return True
     
-  def install(self, owner, path, subpath, installation):
+  def install(self, owner, path, subpath, installation, variant):
     return True
     
   def __str__(self):
@@ -824,18 +825,18 @@ class CommandsBuildInstruction(BuildInstruction):
     super(CommandsBuildInstruction, self).__init__(arguments)
     self.commands = []
       
-  def build(self, owner, path, subpath, installation, imports):
+  def build(self, owner, path, subpath, installation, imports, variant):
     length = len(self.commands)
     for i in range(length):
       if ("CommandBuildInstruction" in str(type(self.commands[i]))):
-        if not (self.commands[i].build(owner, path, subpath, installation, imports)):
+        if not (self.commands[i].build(owner, path, subpath, installation, imports, variant)):
           return False
       else:
         owner.context.log(self.node, str(type(self.commands[i])))
         return False
     return True
     
-  def install(self, owner, path, subpath, installation):
+  def install(self, owner, path, subpath, installation, variant):
     return True
     
   def __str__(self):
@@ -846,7 +847,7 @@ class CommandBuildInstruction(BuildInstruction):
     super(CommandBuildInstruction, self).__init__(arguments)
     self.string = None
     
-  def build(self, owner, path, subpath, installation, imports):
+  def build(self, owner, path, subpath, installation, imports, variant):
     if (self.string == None):
       return False
     command = shlex.split(self.string.getContent().replace("\\", "/"))
@@ -862,7 +863,7 @@ class CommandBuildInstruction(BuildInstruction):
     owner.context.log(self.node, result)
     return True
     
-  def install(self, owner, path, subpath, installation):
+  def install(self, owner, path, subpath, installation, variant):
     return True
     
   def __str__(self):
@@ -878,7 +879,7 @@ class Setter(BuildInstruction):
     if (type(value) == Value):
       self.value = value
       
-  def build(self, owner, path, subpath, installation, imports):
+  def build(self, owner, path, subpath, installation, imports, variant):
     if not ((self.key == None) or (self.value == None)):
       owner.context.environment[self.key.getContent()] = self.value.getContent()
       owner.context.log(self.node, "<\""+self.key.getContent()+"\" -> \""+self.value.getContent()+"\">")
@@ -910,23 +911,23 @@ class Dependency(Build):
     if (type(exports) == ExportList):
       self.exports = exports
     
-  def build(self, owner):
+  def build(self, owner, variant):
     success = True
     if not (self.imports == None):
-      success = self.imports.doImport(self)
+      success = self.imports.doImport(self, variant)
     if not (success):
       return False
     if not (self.exports == None):
-      success = self.exports.doExport(self)
+      success = self.exports.doExport(self, variant)
     if not (success):
       return False
-    success = super(Dependency, self).build(owner)
+    success = super(Dependency, self).build(owner, variant)
     if not (success):
       return False
     return True
     
-  def distribute(self, owner, distribution):
-    exports = self.getExports()
+  def distribute(self, owner, distribution, variant):
+    exports = self.getExports(variant)
     if not (type(exports) == dict):
       return False
     for key in exports:
@@ -935,7 +936,7 @@ class Dependency(Build):
         if (os.path.isdir(export[1])):
           for root, folders, files in os.walk(export[1]):
             for name in files:
-              if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, name).replace("\\", "/"))):
+              if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
                 return False
     return True
     
@@ -945,13 +946,13 @@ class Dependency(Build):
   def getLabel(self):
     return self.label.getContent()
     
-  def doExport(self, key, value, export):
+  def doExport(self, key, value, export, variant):
     return True
     
-  def doImport(self, label):
+  def doImport(self, label, variant):
     return True
     
-  def getExports(self):
+  def getExports(self, variant):
     return []
 
 class RemoteDependency(Dependency):
@@ -961,38 +962,38 @@ class RemoteDependency(Dependency):
     if (type(url) == URL):
       self.url = url
       
-  def build(self, owner):
-    success = super(RemoteDependency, self).build(owner)
+  def build(self, owner, variant):
+    success = super(RemoteDependency, self).build(owner, variant)
     if not (success):
       return False
     return True
     
-  def doExport(self, key, value, export):
+  def doExport(self, key, value, export, variant):
     return True
     
-  def doImport(self, label):
+  def doImport(self, label, variant):
     return True
     
-  def getExports(self):
+  def getExports(self, variant):
     return []
 
 class DependencyList(List):
   def __init__(self):
     super(DependencyList, self).__init__()
     
-  def build(self, owner):
+  def build(self, owner, variant):
     length = len(self.content)
     for i in range(length):
       if (isinstance(self.content[i], Dependency)):
-        if not (self.content[i].build(owner)):
+        if not (self.content[i].build(owner, variant)):
           return False
     return True
     
-  def distribute(self, owner, distribution):
+  def distribute(self, owner, distribution, variant):
     length = len(self.content)
     for i in range(length):
       if (isinstance(self.content[i], Dependency)):
-        if not (self.content[i].distribute(owner, distribution)):
+        if not (self.content[i].distribute(owner, distribution, variant)):
           return False
     return True
         
@@ -1001,55 +1002,61 @@ class DependencyList(List):
       return False
     return super(DependencyList, self).add(dependency)
     
-  def getExports(self, imports):
+  def getExports(self, imports, variant):
     exports = []
     length = len(self.content)
     for i in range(length):
       if (isinstance(self.content[i], Dependency)):
         label = self.content[i].getLabel()
         if (label in imports):
-          exports.append([label, self.content[i].getExports()])
+          exports.append([label, self.content[i].getExports(variant)])
     return exports
 
 class LocalDependency(Dependency):
   def __init__(self, path = None):
     super(LocalDependency, self).__init__()
     self.exportsContent = {}
-    self.importsContent = []
+    self.importsContent = {}
     self.path = None
     if (type(path) == String):
       self.path = path
     
-  def build(self, owner):
+  def build(self, owner, variant):
     installation = self.getPath(owner, "install")
     path = self.getPath(owner, "build")
-    success = super(LocalDependency, self).build(owner)
+    success = super(LocalDependency, self).build(owner, variant)
     if not (success):
       return False
     if (self.instruction == None):
       return False
-    success = self.instruction.build(owner, path, self.subpath.getContent(), installation, self.importsContent)
+    success = self.instruction.build(owner, path, self.subpath.getContent(), installation, self.importsContent[variant], variant)
     if not (success):
       return False
-    success = self.instruction.install(owner, path, self.subpath.getContent(), installation)
+    success = self.instruction.install(owner, path, self.subpath.getContent(), installation, variant)
     if not (success):
       return False
     return True
     
-  def doExport(self, key, value, export):
-    if (key in self.exportsContent):
+  def doExport(self, key, value, export, variant):
+    if not (variant in self.exportsContent):
+      self.exportsContent[variant] = {}
+    if (key in self.exportsContent[variant]):
       return False
-    self.exportsContent[key] = [export, value]
+    self.exportsContent[variant][key] = [export, value]
     return True
     
-  def doImport(self, label):
-    if (label in self.importsContent):
+  def doImport(self, label, variant):
+    if not (variant in self.importsContent):
+      self.importsContent[variant] = []
+    if (label in self.importsContent[variant]):
       return False
-    self.importsContent.append(label)
+    self.importsContent[variant].append(label)
     return True
     
-  def getExports(self):
-    return self.exportsContent
+  def getExports(self, variant):
+    if not (variant in self.exportsContent):
+      self.exportsContent[variant] = {}
+    return self.exportsContent[variant]
 
   def __str__(self):
     return "<"+self.toString(self.subpath)+", "+self.toString(self.path)+", "+self.toString(self.instruction)+", "+self.toString(self.imports)+", "+self.toString(self.exports)+">"
@@ -1097,7 +1104,7 @@ class GitRepoDependency(RemoteDependency):
   def __init__(self, url = None, branch = None, credentials = None):
     super(GitRepoDependency, self).__init__(url)
     self.exportsContent = {}
-    self.importsContent = []
+    self.importsContent = {}
     self.branch = None
     if (type(branch) == Branch):
       self.branch = branch
@@ -1124,45 +1131,51 @@ class GitRepoDependency(RemoteDependency):
     os.chdir(cwd)
     return True
     
-  def build(self, owner):
+  def build(self, owner, variant):
     installation = self.getPath(owner, "install")
     path = self.getPath(owner, "build")
     success = self.clone(owner, path)
     if not (success):
       return False
-    success = super(GitRepoDependency, self).build(owner)
+    success = super(GitRepoDependency, self).build(owner, variant)
     if not (success):
       return False
     if (self.instruction == None):
       return False
-    success = self.instruction.build(owner, path, self.subpath.getContent(), installation, self.importsContent)
+    success = self.instruction.build(owner, path, self.subpath.getContent(), installation, self.importsContent, variant)
     if not (success):
       return False
-    success = self.instruction.install(owner, path, self.subpath.getContent(), installation)
+    success = self.instruction.install(owner, path, self.subpath.getContent(), installation, variant)
     if not (success):
       return False
     return True
     
-  def doExport(self, key, value, export):
-    if (key in self.exportsContent):
+  def doExport(self, key, value, export, variant):
+    if not (variant in self.exportsContent):
+      self.exportsContent[variant] = {}
+    if (key in self.exportsContent[variant]):
       return False
-    self.exportsContent[key] = [export, value]
+    self.exportsContent[variant][key] = [export, value]
     return True
     
-  def doImport(self, label):
-    if (label in self.importsContent):
+  def doImport(self, label, variant):
+    if not (variant in self.importsContent):
+      self.importsContent[variant] = {}
+    if (label in self.importsContent[variant]):
       return False
-    self.importsContent.append(label)
+    self.importsContent[variant].append(label)
     return True
     
-  def getExports(self):
-    return self.exportsContent
+  def getExports(self, variant):
+    if not (variant in self.exportsContent):
+      self.exportsContent[variant] = {}
+    return self.exportsContent[variant]
     
   def __str__(self):
     return "<"+self.toString(self.subpath)+", "+self.toString(self.url)+", "+self.toString(self.branch)+", "+self.toString(self.credentials)+", "+self.toString(self.instruction)+">"
     
 class Target(Build):
-  def __init__(self, label = None, definitions = None, links = None, imports = None, exports = None, generator = None):
+  def __init__(self, label = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None):
     super(Target, self).__init__()
     self.label = None
     if (type(label) == Label):
@@ -1182,25 +1195,32 @@ class Target(Build):
     self.generator = None
     if (type(generator) == Generator):
       self.generator = generator
+    self.pre = None
+    if (type(pre) == PreBuildInstruction):
+      self.pre = pre
+    self.post = None
+    if (type(post) == PostBuildInstruction):
+      self.post = post
       
   def install(self, owner, path, installation):
     result = cmake_install(path, installation)
     owner.context.log(self.node, result)
     return True
     
-  def build(self, owner):
+  def build(self, owner, variant):
     installation = self.getPath(owner, "install")
+    subpath = self.getPath(owner, None)
     path = self.getPath(owner, "build")
     success = True
     if not (self.imports == None):
-      success = self.imports.doImport(self)
+      success = self.imports.doImport(self, variant)
     if not (success):
       return False
     if not (self.exports == None):
-      success = self.exports.doExport(self)
+      success = self.exports.doExport(self, variant)
     if not (success):
       return False
-    success = super(Target, self).build(owner)
+    success = super(Target, self).build(owner, variant)
     if not (success):
       return False
     project = self.getFiles(owner)
@@ -1243,6 +1263,10 @@ class Target(Build):
         value = export.value.getContent()
         if not (key in exports):
           exports[key] = [value, export.export.getContent()]
+    if not (self.pre == None):
+      success = self.pre.build(owner, subpath, path, installation, imports, variant)
+    if not (success):
+      return False
     if not (os.path.isdir(path)):
       os.makedirs(path)
     descriptor = open(os.path.join(path, "CMakeLists.txt"), "w")
@@ -1323,10 +1347,11 @@ class Target(Build):
     if (generator == None):
       return False
     arguments = []
-    success = self.buildVariant(owner, generator, arguments, path, installation, "Debug")
+    success = self.buildVariant(owner, generator, arguments, path, installation, variant)
     if not (success):
       return False
-    success = self.buildVariant(owner, generator, arguments, path, installation, "Release")
+    if not (self.post == None):
+      success = self.post.build(owner, subpath, path, installation, imports, variant)
     if not (success):
       return False
     return True
@@ -1339,24 +1364,26 @@ class Target(Build):
     success = self.install(owner, os.path.join(path, "build", variant.lower()).replace("\\", "/"), os.path.join(installation, variant.lower()).replace("\\", "/"))
     return success
     
-  def distribute(self, owner, distribution):
-    installation = find(self.getPath(owner, "install"), self.label.getContent())
+  def distribute(self, owner, distribution, variant):
+    installation = find(os.path.join(self.getPath(owner, "install"), variant.lower()).replace("\\", "/"), self.label.getContent())
     if (installation == None):
       return False
-    if not (copy(installation.replace("\\", "/"), os.path.join(distribution, os.path.basename(installation)).replace("\\", "/"))):
+    if not (copy(installation.replace("\\", "/"), os.path.join(distribution, variant.lower(), os.path.basename(installation)).replace("\\", "/"))):
       return False
     return True
 
-  def doExport(self, key, value, export):
+  def doExport(self, key, value, export, variant):
     return True
     
-  def doImport(self, label):
+  def doImport(self, label, variant):
     return True
     
-  def getExports(self):
+  def getExports(self, variant):
     return []
     
   def getPath(self, owner, purpose):
+    if (purpose == None):
+      return adjust(os.path.join(wd(), owner.directory.getContent(), self.label.getContent()))
     return adjust(os.path.join(wd(), owner.context.root.directory.getContent(), owner.directory.getContent(), purpose, "targets", self.label.getContent()))
     
   def getLabel(self):
@@ -1364,7 +1391,7 @@ class Target(Build):
     
   def getFiles(self, owner):
     result = []
-    path = adjust(os.path.join(wd(), owner.directory.getContent(), self.label.getContent()))
+    path = self.getPath(owner, None)
     for root, folders, files in os.walk(path):
       for name in files:
         result.append(os.path.join(root, name))
@@ -1372,7 +1399,7 @@ class Target(Build):
 
   def getIncludes(self, owner):
     result = []
-    path = adjust(os.path.join(wd(), owner.directory.getContent(), self.label.getContent()))
+    path = self.getPath(owner, None)
     for root, folders, files in os.walk(path):
       result.append(root)
     return result
@@ -1381,19 +1408,19 @@ class TargetList(List):
   def __init__(self):
     super(TargetList, self).__init__()
     
-  def build(self, owner):
+  def build(self, owner, variant):
     length = len(self.content)
     for i in range(length):
       if (isinstance(self.content[i], Target)):
-        if not (self.content[i].build(owner)):
+        if not (self.content[i].build(owner, variant)):
           return False
     return True
     
-  def distribute(self, owner, distribution):
+  def distribute(self, owner, distribution, variant):
     length = len(self.content)
     for i in range(length):
       if (isinstance(self.content[i], Target)):
-        if not (self.content[i].distribute(owner, distribution)):
+        if not (self.content[i].distribute(owner, distribution, variant)):
           return False
     return True
         
@@ -1402,38 +1429,42 @@ class TargetList(List):
       return False
     return super(TargetList, self).add(target)
     
-  def getExports(self, imports):
+  def getExports(self, imports, variant):
     exports = []
     length = len(self.content)
     for i in range(length):
       if (isinstance(self.content[i], Target)):
         label = self.content[i].getLabel()
         if (label in imports):
-          exports.append([label, self.content[i].getExports()])
+          exports.append([label, self.content[i].getExports(variant)])
     return exports
     
 class ExecutableTarget(Target):
   def __init__(self, label = None, definitions = None, links = None, imports = None):
     super(ExecutableTarget, self).__init__(label, definitions, links, imports)
     self.exportsContent = {}
-    self.importsContent = []
+    self.importsContent = {}
     
-  def build(self, owner):
-    success = super(ExecutableTarget, self).build(owner)
+  def build(self, owner, variant):
+    success = super(ExecutableTarget, self).build(owner, variant)
     if not (success):
       return False
     return True
     
-  def doExport(self, key, value, export):
-    if (key in self.exportsContent):
+  def doExport(self, key, value, export, variant):
+    if not (variant in self.exportsContent):
+      self.exportsContent[variant] = {}
+    if (key in self.exportsContent[variant]):
       return False
-    self.exportsContent[key] = [export, value]
+    self.exportsContent[variant][key] = [export, value]
     return True
     
-  def doImport(self, label):
-    if (label in self.importsContent):
+  def doImport(self, label, variant):
+    if not (variant in self.importsContent):
+      self.importsContent[variant] = []
+    if (label in self.importsContent[variant]):
       return False
-    self.importsContent.append(label)
+    self.importsContent[variant].append(label)
     return True
     
   def __str__(self):
@@ -1443,24 +1474,28 @@ class LibraryTarget(Target):
   def __init__(self, label = None, definitions = None, links = None, imports = None, exports = None):
     super(LibraryTarget, self).__init__(label, definitions, links, imports, exports)
     self.exportsContent = {}
-    self.importsContent = []
+    self.importsContent = {}
     
-  def build(self, owner):
-    success = super(LibraryTarget, self).build(owner)
+  def build(self, owner, variant):
+    success = super(LibraryTarget, self).build(owner, variant)
     if not (success):
       return False
     return True
     
-  def doExport(self, key, value, export):
-    if (key in self.exportsContent):
+  def doExport(self, key, value, export, variant):
+    if not (variant in self.exportsContent):
+      self.exportsContent[variant] = {}
+    if (key in self.exportsContent[variant]):
       return False
-    self.exportsContent[key] = [export, value]
+    self.exportsContent[variant][key] = [export, value]
     return True
     
-  def doImport(self, label):
-    if (label in self.importsContent):
+  def doImport(self, label, variant):
+    if not (variant in self.importsContent):
+      self.importsContent[variant] = []
+    if (label in self.importsContent[variant]):
       return False
-    self.importsContent.append(label)
+    self.importsContent[variant].append(label)
     return True
     
   def __str__(self):
@@ -1482,33 +1517,34 @@ class Project(Element):
     if (str(type(context)) == "Context"):
       self.context = context
       
-  def build(self, owner):
+  def build(self, owner, variant):
     if not (self.dependencies == None):
-      if not (self.dependencies.build(self)):
+      if not (self.dependencies.build(self, variant)):
         return False
     if not (self.targets == None):
-      if not (self.targets.build(self)):
+      if not (self.targets.build(self, variant)):
         return False
     return True
     
-  def distribute(self, owner, distribution):
-    if (os.path.isdir(distribution)):
-      shutil.rmtree(distribution)
-    os.makedirs(distribution)
+  def distribute(self, owner, distribution, variant):
+    path = os.path.join(distribution, variant.lower()).replace("\\", "/")
+    if (os.path.isdir(path)):
+      shutil.rmtree(path)
+    os.makedirs(path)
     if not (self.dependencies == None):
-      if not (self.dependencies.distribute(self, distribution)):
+      if not (self.dependencies.distribute(self, distribution, variant)):
         return False
     if not (self.targets == None):
-      if not (self.targets.distribute(self, distribution)):
+      if not (self.targets.distribute(self, distribution, variant)):
         return False
     return True
     
-  def getExports(self, imports):
+  def getExports(self, imports, variant):
     exports = []
     if not (self.dependencies == None):
-      exports = exports+self.dependencies.getExports(imports)
+      exports = exports+self.dependencies.getExports(imports, variant)
     if not (self.targets == None):
-      exports = exports+self.targets.getExports(imports)
+      exports = exports+self.targets.getExports(imports, variant)
     return exports
     
   def __str__(self):
@@ -1527,7 +1563,7 @@ class Buildster(Element):
     if (str(type(context)) == "Context"):
       self.context = context
       
-  def build(self, owner):
+  def build(self, owner, variant):
     return True
     
   def __str__(self):
@@ -1735,6 +1771,8 @@ class Context(Element):
     nodeParents["command"].append("commands")
     nodeParents["pre"].append("build")
     nodeParents["post"].append("build")
+    nodeParents["pre"].append("target")
+    nodeParents["post"].append("target")
     
     nodeAttributes["data"].append("id")
     nodeAttributes["if"].append("id")
@@ -1780,11 +1818,11 @@ class Context(Element):
       if (("msys" in self.data["BUILDSTER_OS"].lower()) or ("cygwin" in self.data["BUILDSTER_OS"].lower())):
         self.data["BUILDSTER_OS"] = "Windows"
     
-  def build(self, owner):
+  def build(self, owner, variant):
     self.tier = None
     self.log(self.node, "CONTEXT_BUILD_BEGIN\n")
     for i in range(len(self.projects)):
-      if not (self.projects[i].build(self)):
+      if not (self.projects[i].build(self, variant)):
         self.tier = None
         self.log(self.node, "CONTEXT_BUILD_END\n")
         return False
@@ -1792,11 +1830,11 @@ class Context(Element):
     self.log(self.node, "CONTEXT_BUILD_END\n")
     return True
     
-  def distribute(self, owner, distribution):
+  def distribute(self, owner, distribution, variant):
     self.tier = None
     self.log(self.node, "CONTEXT_DISTRIBUTE_BEGIN\n")
     for i in range(len(self.projects)):
-      if not (self.projects[i].distribute(self, os.path.join(wd(), self.root.directory.getContent(), distribution).replace("\\", "/"))):
+      if not (self.projects[i].distribute(self, os.path.join(wd(), self.root.directory.getContent(), distribution).replace("\\", "/"), variant)):
         self.tier = None
         self.log(self.node, "CONTEXT_DISTRIBUTE_END\n")
         return False
@@ -2381,7 +2419,7 @@ def handle(context, node, tier, parents):
             project = get_parent(parents, "project")
             if not (project == None):
               temp = handle(context, label, tier, [None])
-              output = adjust(os.path.join(wd(), context.root.getContent(), project.attrib["directory"], "install", "dependencies", temp[1], context.variant.lower()))
+              output = adjust(os.path.join(wd(), context.root.getContent(), project.attrib["directory"], "install", "dependencies", temp[1], context.variant.lower())).replace("\\", "/")
             else:
               context.log(node, "No \"project\" ancestor for \"label\" node!\n")
               result = False
@@ -2396,7 +2434,7 @@ def handle(context, node, tier, parents):
               project = get_parent(parents, "project")
               if not (project == None):
                 temp = handle(context, label, tier, [None])
-                output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "targets", temp[1], context.variant.lower()))
+                output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "targets", temp[1], context.variant.lower())).replace("\\", "/")
               else:
                 context.log(node, "No \"project\" ancestor for \"label\" node!\n")
                 result = False
@@ -2414,7 +2452,7 @@ def handle(context, node, tier, parents):
             project = get_parent(parents, "project")
             if not (project == None):
               temp = handle(context, label, tier, [None])
-              output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "build", "dependencies", temp[1]))
+              output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "build", "dependencies", temp[1])).replace("\\", "/")
             else:
               context.log(node, "No \"project\" ancestor for \"label\" node!\n")
               result = False
@@ -2429,7 +2467,7 @@ def handle(context, node, tier, parents):
               project = get_parent(parents, "project")
               if not (project == None):
                 temp = handle(context, label, tier, [None])
-                output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "build", "targets", temp[1]))
+                output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], temp[1])).replace("\\", "/")
               else:
                 context.log(node, "No \"project\" ancestor for \"label\" node!\n")
                 result = False
@@ -2514,6 +2552,16 @@ def handle(context, node, tier, parents):
             element.generator = generator
             break
           elements["generator"] = None
+        if ("pre" in elements):
+          for pre in elements["pre"]:
+            element.pre = pre
+            break
+          elements["pre"] = None
+        if ("post" in elements):
+          for post in elements["post"]:
+            element.post = post
+            break
+          elements["post"] = None
         context.log(node, element.toString()+"\n")
       elif (tag == "export"):
         element.export = String(node.attrib["type"])
@@ -2590,32 +2638,37 @@ def handle(context, node, tier, parents):
   return [result, output, elements]
 
 def run(target, data):
-  dictionary = {}
-  for i in range(len(data)):
-    element = data[i]
-    elements = element.split("=")
-    if (len(elements) == 2):
-      left = elements[0].strip()
-      right = elements[1].strip()
-      dictionary[left] = right
-  tree = xml_tree.parse(target)
-  base = tree.getroot()
-  if not (base.tag == "buildster"):
-    return False
-  context = Context(dictionary)
-  result = handle(context, base, 0, [None])
-  if not (result[0]):
+  variants = []
+  variants.append("Debug")
+  variants.append("Release")
+  for variant in variants:
+    dictionary = {}
+    for i in range(len(data)):
+      element = data[i]
+      elements = element.split("=")
+      if (len(elements) == 2):
+        left = elements[0].strip()
+        right = elements[1].strip()
+        dictionary[left] = right
+    tree = xml_tree.parse(target)
+    base = tree.getroot()
+    if not (base.tag == "buildster"):
+      return False
+    context = Context(dictionary)
+    context.variant = variant
+    result = handle(context, base, 0, [None])
+    if not (result[0]):
+      context.report()
+      return False
+    output = result[1]
+    elements = result[2]
+    if not (context.build(context, variant)):
+      context.report()
+      return False
+    if not (context.distribute(context, context.root.distribution.getContent(), variant)):
+      context.report()
+      return False
     context.report()
-    return False
-  output = result[1]
-  elements = result[2]
-  if not (context.build(context)):
-    context.report()
-    return False
-  if not (context.distribute(context, context.root.distribution.getContent())):
-    context.report()
-    return False
-  context.report()
   return True
 
 if (__name__ == "__main__"):
