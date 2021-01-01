@@ -11,6 +11,13 @@ import subprocess
 import xml.etree.ElementTree as xml_tree
 from datetime import datetime
 
+def unique(duplicates):
+  uniques = []
+  for duplicate in duplicates:
+    if not (duplicate in uniques):
+      uniques.append(duplicate)
+  return uniques
+
 def wd():
   filename = inspect.getframeinfo(inspect.currentframe()).filename
   path = os.path.dirname(os.path.abspath(filename))
@@ -1228,6 +1235,8 @@ class Target(Build):
     labels = {}
     imports = {}
     exports = {}
+    includes = []
+    project = []
     for i in range(len(owner.dependencies.content)):
       dependency = owner.dependencies.content[i]
       if not (dependency == self):
@@ -1267,8 +1276,8 @@ class Target(Build):
       return False
     if not (os.path.isdir(path)):
       os.makedirs(path)
-    project = self.getFiles(owner)
-    includes = self.getIncludes(owner)
+    project = unique(project+self.getFiles(owner))
+    includes = unique(includes+self.getIncludes(owner))
     descriptor = open(os.path.join(path, "CMakeLists.txt"), "w")
     write(descriptor, "cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)")
     write(descriptor, "set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)")
