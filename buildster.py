@@ -732,15 +732,16 @@ class CmakeBuildInstruction(BuildInstruction):
     arguments = self.arguments.getContent()
     arguments.append("-DCMAKE_BUILD_WITH_INSTALL_RPATH=\"TRUE\"")
     exports = owner.getExports(imports, variant)
-    for i in range(len(exports)):
-      export = exports[i]
-      if (export[0] in imports):
-        export = export[1]
-        for key in export:
-          if (export[key][0] == "other"):
-            arguments.append("-D"+key+"=\""+export[key][1].replace("\\", "/")+"\"")
-          else:
-            arguments.append("-D"+key+"="+export[key][1].replace("\\", "/"))
+    if (variant in imports):
+      for i in range(len(exports)):
+        export = exports[i]
+        if (export[0] in imports[variant]):
+          export = export[1]
+          for key in export:
+            if (export[key][0] == "other"):
+              arguments.append("-D"+key+"=\""+export[key][1].replace("\\", "/")+"\"")
+            else:
+              arguments.append("-D"+key+"="+export[key][1].replace("\\", "/"))
     if not (self.getPre() == None):
       if not (self.getPre().build(owner, path, subpath, installation, imports, variant)):
         return False
@@ -1012,10 +1013,12 @@ class DependencyList(List):
   def getExports(self, imports, variant):
     exports = []
     length = len(self.content)
+    if not (variant in imports):
+      return exports
     for i in range(length):
       if (isinstance(self.content[i], Dependency)):
         label = self.content[i].getLabel()
-        if (label in imports):
+        if (label in imports[variant]):
           exports.append([label, self.content[i].getExports(variant)])
     return exports
 
@@ -1167,7 +1170,7 @@ class GitRepoDependency(RemoteDependency):
     
   def doImport(self, label, variant):
     if not (variant in self.importsContent):
-      self.importsContent[variant] = {}
+      self.importsContent[variant] = []
     if (label in self.importsContent[variant]):
       return False
     self.importsContent[variant].append(label)
@@ -1443,10 +1446,12 @@ class TargetList(List):
   def getExports(self, imports, variant):
     exports = []
     length = len(self.content)
+    if not (variant in imports):
+      return exports
     for i in range(length):
       if (isinstance(self.content[i], Target)):
         label = self.content[i].getLabel()
-        if (label in imports):
+        if (label in imports[variant]):
           exports.append([label, self.content[i].getExports(variant)])
     return exports
     
