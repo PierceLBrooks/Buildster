@@ -1624,6 +1624,7 @@ class Context(Element):
     self.libraries.append("a")
     self.libraries.append("lib")
     self.libraries.append("dylib")
+    self.libraries.append("so")
     
     self.conditionals = []
     
