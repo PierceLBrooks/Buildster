@@ -3,10 +3,15 @@
 
 import os
 import sys
+import wget
 import shlex
 import shutil
+import zipfile
+import tarfile
 import inspect
+import logging
 import platform
+import traceback
 import subprocess
 import xml.etree.ElementTree as xml_tree
 from datetime import datetime
@@ -77,8 +82,32 @@ def find(base, leaf):
 def copy(source, destination):
   if (os.path.exists(destination)):
     return False
-  shutil.copyfile(source, destination)
+  try:
+    shutil.copyfile(source, destination)
+  except:
+    return False
   return True
+  
+def unzip(source, destination):
+  success = True
+  try:
+    with zipfile.ZipFile(source) as zf:
+      zf.extractall(destination)
+  except Exception as exception:
+    logging.error(traceback.format_exc())
+    success = False
+  return success
+  
+def untar(source, destination):
+  success = True
+  try:
+    with open(source, "rb") as handle:
+      with tarfile.open(fileobj=handle) as tf:
+        tf.extractall(destination)
+  except Exception as exception:
+    logging.error(traceback.format_exc())
+    success = False
+  return success
 
 def adjust(path):
   paths = split(path)
@@ -364,6 +393,51 @@ class Value(Object):
       
   def getContent(self):
     return self.string.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.string)+">"
+
+class Extract(Object):
+  def __init__(self, string = None):
+    super(Extract, self).__init__()
+    self.string = None
+    if (type(string) == String):
+      self.string = string
+      
+  def getContent(self):
+    return self.string.getContent()
+    
+  def perform(self):
+    if (self.string == None):
+      return False
+    content = self.getContent().strip()
+    if (len(content) == 0):
+      return False
+    print(content)
+    if not (os.path.isfile(content)):
+      return False
+    path = os.path.dirname(content)
+    filename = os.path.basename(content)
+    index = -1
+    for i in range(len(filename)):
+      if (filename[i:(i+1)] == "."):
+        index = i
+        break
+    if (index < 0):
+      return False
+    extension = filename[index:]
+    filename = filename[:index]
+    if (os.path.exists(os.path.join(path, filename))):
+      return True
+    if (extension == ".zip"):
+      if not (unzip(content, os.path.join(path, filename))):
+        return False
+    elif (extension.startswith(".tar")):
+      if not (untar(content, os.path.join(path, filename))):
+        return False
+    else:
+      return False
+    return True
     
   def __str__(self):
     return "<"+self.toString(self.string)+">"
@@ -787,7 +861,6 @@ class ShellsBuildInstruction(BuildInstruction):
     for i in range(length):
       if ("ShellBuildInstruction" in str(type(self.shells[i]))):
         if not (self.shells[i].build(owner, path, subpath, installation, imports, variant)):
-          print("shell")
           return False
       else:
         owner.context.log(self.node, str(type(self.shells[i])))
@@ -854,8 +927,17 @@ class CommandBuildInstruction(BuildInstruction):
   def __init__(self, arguments = None, generator = None, source = None):
     super(CommandBuildInstruction, self).__init__(arguments)
     self.string = None
+    self.extracts = []
     
   def build(self, owner, path, subpath, installation, imports, variant):
+    if not (len(self.extracts) == 0):
+      for i in range(len(self.extracts)):
+        extract = self.extracts[i]
+        if (extract == None):
+          continue
+        if not (extract.perform()):
+          return False
+      return True
     if (self.string == None):
       return False
     command = shlex.split(self.string.getContent().replace("\\", "/"))
@@ -1183,6 +1265,85 @@ class GitRepoDependency(RemoteDependency):
     
   def __str__(self):
     return "<"+self.toString(self.subpath)+", "+self.toString(self.url)+", "+self.toString(self.branch)+", "+self.toString(self.credentials)+", "+self.toString(self.instruction)+">"
+    
+class WGetDependency(RemoteDependency):
+  def __init__(self, url = None, string = None):
+    super(WGetDependency, self).__init__(url)
+    self.exportsContent = {}
+    self.importsContent = {}
+    self.string = None
+    if (type(string) == String):
+      self.string = string
+    
+  def build(self, owner, variant):
+    if (self.string == None):
+      return False
+    content = self.string.getContent()
+    installation = self.getPath(owner, "install")
+    path = self.getPath(owner, "build")
+    if (content == None):
+      return False
+    content = content.strip()
+    if (len(content) == 0):
+      return False
+    if not (os.path.isdir(path)):
+      os.makedirs(path)
+    success = True
+    if not (os.path.exists(os.path.join(path, content))):
+      try:
+        filename = wget.download(self.url.getContent(), out=path)
+        if (filename == None):
+          success = False
+        else:
+          if not (os.path.exists(os.path.join(path, filename))):
+            success = False
+          else:
+            if not (copy(os.path.join(path, filename), os.path.join(path, content))):
+              success = False
+            else:
+              if not (os.path.exists(os.path.join(path, content))):
+                success = False
+      except:
+        success = False
+    if not (success):
+      return False
+    success = super(WGetDependency, self).build(owner, variant)
+    if not (success):
+      return False
+    if (self.instruction == None):
+      return False
+    success = self.instruction.build(owner, path, self.subpath.getContent(), installation, self.importsContent, variant)
+    if not (success):
+      return False
+    success = self.instruction.install(owner, path, self.subpath.getContent(), installation, variant)
+    if not (success):
+      return False
+    return True
+    
+  def doExport(self, key, value, export, variant):
+    if not (variant in self.exportsContent):
+      self.exportsContent[variant] = {}
+    if (key in self.exportsContent[variant]):
+      return False
+    self.exportsContent[variant][key] = [export, value]
+    return True
+    
+  def doImport(self, label, variant):
+    if not (variant in self.importsContent):
+      self.importsContent[variant] = []
+    if (label in self.importsContent[variant]):
+      return False
+    self.importsContent[variant].append(label)
+    return True
+    
+  def getExports(self, variant):
+    if not (variant in self.exportsContent):
+      self.exportsContent[variant] = {}
+    return self.exportsContent[variant]
+    
+  def __str__(self):
+    return "<"+self.toString(self.subpath)+", "+self.toString(self.url)+", "+self.toString(self.string)+", "+self.toString(self.instruction)+">"
+    
     
 class Target(Build):
   def __init__(self, label = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None):
@@ -1668,6 +1829,7 @@ class Context(Element):
     nodeTags.append("path")
     nodeTags.append("subpath")
     nodeTags.append("git_repo")
+    nodeTags.append("wget")
     nodeTags.append("url")
     nodeTags.append("branch")
     nodeTags.append("credentials")
@@ -1702,6 +1864,7 @@ class Context(Element):
     nodeTags.append("shell")
     nodeTags.append("commands")
     nodeTags.append("command")
+    nodeTags.append("extract")
     nodeTags.append("search")
     nodeTags.append("term")
     nodeTags.append("set")
@@ -1745,6 +1908,7 @@ class Context(Element):
     nodeParents["subpath"].append("dependency")
     nodeParents["path"].append("local")
     nodeParents["git_repo"].append("remote")
+    nodeParents["wget"].append("remote")
     nodeParents["url"].append("remote")
     nodeParents["branch"].append("git_repo")
     nodeParents["credentials"].append("git_repo")
@@ -1786,6 +1950,7 @@ class Context(Element):
     nodeParents["shell"].append("shells")
     nodeParents["commands"].append("shell")
     nodeParents["command"].append("commands")
+    nodeParents["extract"].append("command")
     nodeParents["pre"].append("build")
     nodeParents["post"].append("build")
     nodeParents["pre"].append("target")
@@ -2102,6 +2267,8 @@ def handle(context, node, tier, parents):
       element = RemoteDependency()
     elif (tag == "git_repo"):
       element = GitRepoDependency()
+    elif (tag == "wget"):
+      element = WGetDependency()
     elif (tag == "target"):
       target = node.attrib["type"]
       if (target == "executable"):
@@ -2128,6 +2295,8 @@ def handle(context, node, tier, parents):
       element = CommandsBuildInstruction()
     elif (tag == "command"):
       element = CommandBuildInstruction()
+    elif (tag == "extract"):
+      element = Extract()
     elif (tag == "definition"):
       element = Definition()
     elif (tag == "definitions"):
@@ -2272,6 +2441,11 @@ def handle(context, node, tier, parents):
             element = git_repo
             break
           elements["git_repo"] = None
+        if ("wget" in elements):
+          for w_get in elements["wget"]:
+            element = w_get
+            break
+          elements["wget"] = None
         if ("url" in elements):
           for url in elements["url"]:
             element.url = url
@@ -2285,6 +2459,9 @@ def handle(context, node, tier, parents):
           element.credentials = elements["credentials"][0]
           elements["credentials"][0] = None
         context.log(node, element.toString()+"\n")
+      elif (tag == "wget"):
+        output = ensure(node.text)+flatten(output).strip()
+        element.string = String(output.strip())
       elif (tag == "branch"):
         output = ensure(node.text)+flatten(output).strip()
         element = Branch()
@@ -2426,6 +2603,13 @@ def handle(context, node, tier, parents):
             element.commands.append(command)
           elements["command"] = None
       elif (tag == "command"):
+        output = ensure(node.text)+flatten(output).strip()
+        element.string = String(output.strip())
+        if ("extract" in elements):
+          for extract in elements["extract"]:
+            element.extracts.append(extract)
+          elements["extract"] = None
+      elif (tag == "extract"):
         output = ensure(node.text)+flatten(output).strip()
         element.string = String(output.strip())
       elif (tag == "install"):
