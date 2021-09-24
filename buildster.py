@@ -1784,6 +1784,10 @@ class Project(Element):
   def build(self, owner, variant):
     self.owner = owner
     if not (self.dependencies == None):
+      self.dependencies.owner = self
+    if not (self.targets == None):
+      self.targets.owner = self
+    if not (self.dependencies == None):
       if not (self.dependencies.build(self, variant)):
         return False
     if not (self.targets == None):
