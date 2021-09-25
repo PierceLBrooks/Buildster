@@ -1580,8 +1580,6 @@ class Target(Build):
   def buildVariant(self, owner, generator, arguments, path, installation, variant):
     result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build", variant.lower()).replace("\\", "/"), installation, variant)
     owner.getContext().log(self.node, result)
-    print(str(self.importsContent))
-    print(str(self.exportsContent))
     result = cmake_build(os.path.join(path, "build", variant.lower()).replace("\\", "/"))
     owner.getContext().log(self.node, result)
     success = self.install(owner, os.path.join(path, "build", variant.lower()).replace("\\", "/"), os.path.join(installation, variant.lower()).replace("\\", "/"))
