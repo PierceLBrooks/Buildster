@@ -1059,8 +1059,33 @@ class Dependency(Build):
         if (os.path.isdir(export[1])):
           for root, folders, files in os.walk(export[1]):
             for name in files:
-              if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
-                return False
+              if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
+                if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
+                  return False
+        elif (os.path.isfile(export[1])):
+          if not (os.path.exists(os.path.join(distribution, variant.lower(), os.path.basename(export[1])))):
+            if not (copy(export[1].replace("\\", "/"), os.path.join(distribution, variant.lower(), os.path.basename(export[1])).replace("\\", "/"))):
+              return False
+          if (os.path.isdir(os.path.dirname(export[1]))):
+            for root, folders, files in os.walk(os.path.dirname(export[1])):
+              for name in files:
+                if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
+                  if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
+                    return False
+      elif (export[0] == "all"):
+        if (os.path.isdir(export[1])):
+          if (os.path.isdir(os.path.join(export[1], "bin"))):
+            for root, folders, files in os.walk(os.path.join(export[1], "bin")):
+              for name in files:
+                if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
+                  if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
+                    return False
+          if (os.path.isdir(os.path.join(export[1], "lib"))):
+            for root, folders, files in os.walk(os.path.join(export[1], "lib")):
+              for name in files:
+                if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
+                  if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
+                    return False
     return True
     
   def getPath(self, owner, purpose):
