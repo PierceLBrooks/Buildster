@@ -278,10 +278,28 @@ class Build(Element):
     owner.getContext().record(self.node, str(self.exportsContent))
     return True
     
-  def addExport(self, add, variant):
+  def filterExports(self, exportsContent, need):
+    content = {}
+    if not (need == None):
+      if (isinstance(need, Build)):
+        for key in exportsContent:
+          if not (exportsContent[key][2] == None):
+            if not (need.getLabel() in exportsContent[key][2]):
+              content[key] = exportsContent[key]
+          else:
+            content[key] = exportsContent[key]
+      else:
+        for key in exportsContent:
+          content[key] = exportsContent[key]
+    else:
+      for key in exportsContent:
+        content[key] = exportsContent[key]
+    return content
+    
+  def addExport(self, add, variant, exceptions):
     if not (isinstance(add, Export)):
       return False
-    success = self.doExport(add.key.getContent(), add.value.getContent(), add.export.getContent(), variant)
+    success = self.doExport(add.key.getContent(), add.value.getContent(), add.export.getContent(), variant, exceptions)
     if not (success):
       return False
     return True
@@ -294,13 +312,13 @@ class Build(Element):
       return False
     return True
     
-  def doExport(self, key, value, export, variant):
+  def doExport(self, key, value, export, variant, exceptions):
     return True
     
   def doImport(self, label, variant):
     return True
     
-  def getExports(self, variant):
+  def getExports(self, variant, need):
     return []
     
   def getGenerator(self, owner):
@@ -631,7 +649,7 @@ class LinkList(List):
     return super(LinkList, self).add(link)
     
 class Export(Object):
-  def __init__(self, key = None, value = None, export = None):
+  def __init__(self, key = None, value = None, export = None, exceptions = None):
     super(Export, self).__init__()
     self.key = None
     if (type(key) == Key):
@@ -642,11 +660,20 @@ class Export(Object):
     self.export = None
     if (type(export) == String):
       self.export = export
+    self.exceptions = None
+    if (type(exceptions) == String):
+      self.exceptions = exceptions
       
   def doExport(self, owner, variant):
+    exceptions = None
+    if not (self.exceptions == None):
+      exceptions = self.exceptions.getContent()
     if not (isinstance(owner, Build)):
       return False
-    owner.addExport(self, variant)
+    if not (exceptions == None):
+      if (owner.getLabel() in exceptions):
+        return True
+    owner.addExport(self, variant, exceptions)
     return True
       
   def __str__(self):
@@ -1023,7 +1050,7 @@ class Dependency(Build):
     return True
     
   def distribute(self, owner, distribution, variant):
-    exports = self.getExports(variant)
+    exports = self.getExports(variant, self)
     if not (type(exports) == dict):
       return False
     for key in exports:
@@ -1042,13 +1069,13 @@ class Dependency(Build):
   def getLabel(self):
     return self.label.getContent()
     
-  def doExport(self, key, value, export, variant):
+  def doExport(self, key, value, export, variant, exceptions):
     return True
     
   def doImport(self, label, variant):
     return True
     
-  def getExports(self, variant):
+  def getExports(self, variant, need):
     return []
 
 class RemoteDependency(Dependency):
@@ -1064,13 +1091,13 @@ class RemoteDependency(Dependency):
       return False
     return True
     
-  def doExport(self, key, value, export, variant):
+  def doExport(self, key, value, export, variant, exceptions):
     return True
     
   def doImport(self, label, variant):
     return True
     
-  def getExports(self, variant):
+  def getExports(self, variant, need):
     return []
 
 class DependencyList(List):
@@ -1105,6 +1132,10 @@ class DependencyList(List):
     return super(DependencyList, self).add(dependency)
     
   def getExports(self, imports, variant, need):
+    if (need == None):
+      return self.owner.getExports(imports, variant, [self])
+    if (len(need) == 0):
+      return self.owner.getExports(imports, variant, [self])
     exports = self.owner.getExports(imports, variant, need+[self])
     length = len(self.content)
     if not (variant in imports):
@@ -1114,7 +1145,7 @@ class DependencyList(List):
         label = self.content[i].getLabel()
         if (label in imports[variant]):
           if not (self.content[i] in need):
-            exports.append([label, self.content[i].getExports(variant)])
+            exports.append([label, self.content[i].getExports(variant, need[0])])
     return exports
     
   def getTargets(self):
@@ -1155,12 +1186,12 @@ class LocalDependency(Dependency):
       return False
     return True
     
-  def doExport(self, key, value, export, variant):
+  def doExport(self, key, value, export, variant, exceptions):
     if not (variant in self.exportsContent):
       self.exportsContent[variant] = {}
     if (key in self.exportsContent[variant]):
       return False
-    self.exportsContent[variant][key] = [export, value]
+    self.exportsContent[variant][key] = [export, value, exceptions]
     return True
     
   def doImport(self, label, variant):
@@ -1171,10 +1202,11 @@ class LocalDependency(Dependency):
     self.importsContent[variant].append(label)
     return True
     
-  def getExports(self, variant):
+  def getExports(self, variant, need):
     if not (variant in self.exportsContent):
       self.exportsContent[variant] = {}
-    return self.exportsContent[variant]
+    exportsContent = self.filterExports(self.exportsContent[variant], need)
+    return exportsContent
 
   def __str__(self):
     return "<"+self.toString(self.subpath)+", "+self.toString(self.path)+", "+self.toString(self.instruction)+", "+self.toString(self.imports)+", "+self.toString(self.exports)+">"
@@ -1268,12 +1300,12 @@ class GitRepoDependency(RemoteDependency):
       return False
     return True
     
-  def doExport(self, key, value, export, variant):
+  def doExport(self, key, value, export, variant, exceptions):
     if not (variant in self.exportsContent):
       self.exportsContent[variant] = {}
     if (key in self.exportsContent[variant]):
       return False
-    self.exportsContent[variant][key] = [export, value]
+    self.exportsContent[variant][key] = [export, value, exceptions]
     return True
     
   def doImport(self, label, variant):
@@ -1284,10 +1316,11 @@ class GitRepoDependency(RemoteDependency):
     self.importsContent[variant].append(label)
     return True
     
-  def getExports(self, variant):
+  def getExports(self, variant, need):
     if not (variant in self.exportsContent):
       self.exportsContent[variant] = {}
-    return self.exportsContent[variant]
+    exportsContent = self.filterExports(self.exportsContent[variant], need)
+    return exportsContent
     
   def __str__(self):
     return "<"+self.toString(self.subpath)+", "+self.toString(self.url)+", "+self.toString(self.branch)+", "+self.toString(self.credentials)+", "+self.toString(self.instruction)+">"
@@ -1346,12 +1379,12 @@ class WGetDependency(RemoteDependency):
       return False
     return True
     
-  def doExport(self, key, value, export, variant):
+  def doExport(self, key, value, export, variant, exceptions):
     if not (variant in self.exportsContent):
       self.exportsContent[variant] = {}
     if (key in self.exportsContent[variant]):
       return False
-    self.exportsContent[variant][key] = [export, value]
+    self.exportsContent[variant][key] = [export, value, exceptions]
     return True
     
   def doImport(self, label, variant):
@@ -1362,10 +1395,11 @@ class WGetDependency(RemoteDependency):
     self.importsContent[variant].append(label)
     return True
     
-  def getExports(self, variant):
+  def getExports(self, variant, need):
     if not (variant in self.exportsContent):
       self.exportsContent[variant] = {}
-    return self.exportsContent[variant]
+    exportsContent = self.filterExports(self.exportsContent[variant], need)
+    return exportsContent
     
   def __str__(self):
     return "<"+self.toString(self.subpath)+", "+self.toString(self.url)+", "+self.toString(self.string)+", "+self.toString(self.instruction)+">"
@@ -1593,12 +1627,12 @@ class Target(Build):
       return False
     return True
 
-  def doExport(self, key, value, export, variant):
+  def doExport(self, key, value, export, variant, exceptions):
     if not (variant in self.exportsContent):
       self.exportsContent[variant] = {}
     if (key in self.exportsContent[variant]):
       return False
-    self.exportsContent[variant][key] = [export, value]
+    self.exportsContent[variant][key] = [export, value, exceptions]
     return True
     
   def doImport(self, label, variant):
@@ -1609,10 +1643,11 @@ class Target(Build):
     self.importsContent[variant].append(label)
     return True
     
-  def getExports(self, variant):
+  def getExports(self, variant, need):
     if not (variant in self.exportsContent):
       self.exportsContent[variant] = {}
-    return self.exportsContent[variant]
+    exportsContent = self.filterExports(self.exportsContent[variant], need)
+    return exportsContent
     
   def getPath(self, owner, purpose):
     if (purpose == None):
@@ -1675,6 +1710,10 @@ class TargetList(List):
     return super(TargetList, self).add(target)
     
   def getExports(self, imports, variant, need):
+    if (need == None):
+      return self.owner.getExports(imports, variant, [self])
+    if (len(need) == 0):
+      return self.owner.getExports(imports, variant, [self])
     exports = self.owner.getExports(imports, variant, need+[self])
     length = len(self.content)
     if not (variant in imports):
@@ -1684,7 +1723,7 @@ class TargetList(List):
         label = self.content[i].getLabel()
         if (label in imports[variant]):
           if not (self.content[i] in need):
-            exports.append([label, self.content[i].getExports(variant)])
+            exports.append([label, self.content[i].getExports(variant, need[0])])
     return exports
     
   def getTargets(self):
@@ -1712,12 +1751,12 @@ class ExecutableTarget(Target):
       return False
     return True
     
-  def doExport(self, key, value, export, variant):
+  def doExport(self, key, value, export, variant, exceptions):
     if not (variant in self.exportsContent):
       self.exportsContent[variant] = {}
     if (key in self.exportsContent[variant]):
       return False
-    self.exportsContent[variant][key] = [export, value]
+    self.exportsContent[variant][key] = [export, value, exceptions]
     return True
     
   def doImport(self, label, variant):
@@ -1743,12 +1782,12 @@ class LibraryTarget(Target):
       return False
     return True
     
-  def doExport(self, key, value, export, variant):
+  def doExport(self, key, value, export, variant, exceptions):
     if not (variant in self.exportsContent):
       self.exportsContent[variant] = {}
     if (key in self.exportsContent[variant]):
       return False
-    self.exportsContent[variant][key] = [export, value]
+    self.exportsContent[variant][key] = [export, value, exceptions]
     return True
     
   def doImport(self, label, variant):
@@ -1809,6 +1848,10 @@ class Project(Element):
     
   def getExports(self, imports, variant, need):
     exports = []
+    if (need == None):
+      return exports
+    if (len(need) == 0):
+      return exports
     if not (self.dependencies == None):
       if not (self.dependencies in need):
         exports = exports+self.dependencies.getExports(imports, variant, need)
@@ -2059,17 +2102,18 @@ class Context(Element):
     nodeParents["pre"].append("target")
     nodeParents["post"].append("target")
     
-    nodeAttributes["data"].append("id")
-    nodeAttributes["if"].append("id")
-    nodeAttributes["if_check"].append("id")
-    nodeAttributes["if_check"].append("check")
-    nodeAttributes["switch"].append("id")
-    nodeAttributes["case"].append("check")
-    nodeAttributes["buildster"].append("directory")
-    nodeAttributes["project"].append("directory")
-    nodeAttributes["export"].append("type")
-    nodeAttributes["target"].append("type")
-    nodeAttributes["search"].append("type")
+    nodeAttributes["data"].append(["id", False])
+    nodeAttributes["if"].append(["id", False])
+    nodeAttributes["if_check"].append(["id", False])
+    nodeAttributes["if_check"].append(["check", False])
+    nodeAttributes["switch"].append(["id", False])
+    nodeAttributes["case"].append(["check", False])
+    nodeAttributes["buildster"].append(["directory", False])
+    nodeAttributes["project"].append(["directory", False])
+    nodeAttributes["export"].append(["except", True])
+    nodeAttributes["export"].append(["type", False])
+    nodeAttributes["target"].append(["type", False])
+    nodeAttributes["search"].append(["type", False])
     
     
     self.nodeTags = nodeTags
@@ -2150,9 +2194,12 @@ class Context(Element):
     if (tag in self.nodeAttributes):
       attributes = self.nodeAttributes[tag]
       for attribute in attributes:
+        optional = attribute[1]
+        attribute = attribute[0]
         if not (attribute in node.attrib):
-          self.record(node, "Node Attribute Error...")
-          return False
+          if not (optional):
+            self.record(node, "Node Attribute Error...")
+            return False
     return True
   
   def find(self, id):
@@ -2876,7 +2923,10 @@ def handle(context, node, tier, parents):
           elements["post"] = None
         context.log(node, element.toString()+"\n")
       elif (tag == "export"):
-        element.export = String(node.attrib["type"])
+        if ("type" in node.attrib):
+          element.export = String(node.attrib["type"])
+        if ("except" in node.attrib):
+          element.exceptions = String(node.attrib["except"])
         if ("key" in elements):
           for key in elements["key"]:
             element.key = key
