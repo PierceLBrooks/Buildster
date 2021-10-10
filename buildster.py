@@ -4,6 +4,7 @@
 import re
 import os
 import sys
+import json
 import wget
 import shlex
 import shutil
@@ -31,6 +32,7 @@ def wd():
 
 def write(descriptor, line):
   descriptor.write(line+"\n")
+  return True
   
 def read(path):
   descriptor = open(path, "r")
@@ -81,10 +83,17 @@ def find(base, leaf):
   return None
 
 def copy(source, destination):
+  temp = None
   if (os.path.exists(destination)):
-    return False
+    if (os.path.isdir(destination)):
+      temp = os.path.join(destination, os.path.basename(source))
+    else:
+      return False
   try:
-    shutil.copyfile(source, destination)
+    if (temp == None):
+      shutil.copyfile(source.replace("\\", "/"), destination.replace("\\", "/"))
+    else:
+      shutil.copyfile(source.replace("\\", "/"), temp.replace("\\", "/"))
   except:
     return False
   return True
@@ -246,7 +255,7 @@ class Object(object):
     other = arguments[0]
     if (other == None):
       return "/NULL/"
-    if ((str(type(other)) == "str") or (str(type(other)) == "list")):
+    if ((str(type(other)).strip() == "str") or (str(type(other)).strip() == "list")):
       return str(other)
     if not (isinstance(other, Object)):
       return "/INVALID/"
@@ -421,10 +430,23 @@ class Value(Object):
     
   def __str__(self):
     return "<"+self.toString(self.string)+">"
-
-class Extract(Object):
+    
+class Destination(Object):
+  def __init__(self, path = None):
+    super(Destination, self).__init__()
+    self.path = None
+    if (type(path) == Path):
+      self.path = path
+      
+  def getContent(self):
+    return self.path.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.path)+">"
+    
+class Content(Object):
   def __init__(self, string = None):
-    super(Extract, self).__init__()
+    super(Content, self).__init__()
     self.string = None
     if (type(string) == String):
       self.string = string
@@ -432,8 +454,135 @@ class Extract(Object):
   def getContent(self):
     return self.string.getContent()
     
-  def perform(self):
-    if (self.string == None):
+  def __str__(self):
+    return "<"+self.toString(self.string)+">"
+    
+class CopierSource(Object):
+  def __init__(self, path = None):
+    super(CopierSource, self).__init__()
+    self.path = None
+    if (type(path) == Path):
+      self.path = path
+      
+  def getContent(self):
+    return self.path.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.path)+">"
+    
+class CopierDestination(Object):
+  def __init__(self, path = None):
+    super(CopierDestination, self).__init__()
+    self.path = None
+    if (type(path) == Path):
+      self.path = path
+      
+  def getContent(self):
+    return self.path.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.path)+">"
+    
+class Writer(Object):
+  def __init__(self, destination = None, content = None):
+    super(Writer, self).__init__()
+    self.destination = None
+    self.content = None
+    if (type(destination) == Destination):
+      self.destination = destination
+    if (type(content) == Content):
+      self.content = content
+      
+  def getContent(self):
+    return self.destination.getContent()
+    
+  def perform(self, owner):
+    owner.getContext().log(None, "Writing \""+self.toString(self.destination)+"\"...")
+    if ((self.destination == None) or (self.content == None)):
+      return False
+    content = self.getContent().strip()
+    if (len(content) == 0):
+      return False
+    descriptor = open(content, "w")
+    if not (write(descriptor, self.content.getContent())):
+      return False
+    descriptor.close()
+    owner.getContext().log(None, "Wrote \""+self.toString(self.destination)+"\"!")
+    return True
+    
+  def __str__(self):
+    return "<"+self.toString(self.destination)+", "+self.toString(self.content)+">"
+
+class Copier(Object):
+  def __init__(self, source = None, destination = None):
+    super(Copier, self).__init__()
+    self.source = None
+    self.destination = None
+    if (type(source) == CopierSource):
+      self.source = string
+    if (type(destination) == CopierDestination):
+      self.destination = destination
+      
+  def getContent(self):
+    return ""
+    
+  def perform(self, owner):
+    owner.getContext().log(None, "Copying from \""+self.toString(self.source)+"\" to \""+self.toString(self.destination)+"\"...")
+    if ((self.source == None) or (self.destination == None)):
+      return False
+    source = self.source.getContent()
+    destination = self.destination.getContent()
+    if not (copy(source, destination)):
+      return False
+    owner.getContext().log(None, "Copied from \""+self.toString(self.source)+"\" to \""+self.toString(self.destination)+"\"!")
+    return True
+    
+  def __str__(self):
+    return "<"+self.toString(self.source)+", "+self.toString(self.destination)+">"
+
+class Deleter(Object):
+  def __init__(self, path = None):
+    super(Deleter, self).__init__()
+    self.path = None
+    if (type(path) == Path):
+      self.path = path
+      
+  def getContent(self):
+    return self.path.getContent()
+    
+  def perform(self, owner):
+    owner.getContext().log(None, "Deleting \""+self.toString(self.path)+"\"...")
+    if (self.path == None):
+      return False
+    content = self.getContent().strip()
+    if (len(content) == 0):
+      return False
+    if not (os.path.exists(content)):
+      owner.getContext().log(None, "Deleted \""+self.toString(self.path)+"\"!")
+      return True
+    if (os.path.isfile(content)):
+      os.unlink(content)
+    else:
+      shutil.rmtree(content)
+    owner.getContext().log(None, "Deleted \""+self.toString(self.path)+"\"!")
+    return True
+    
+  def __str__(self):
+    return "<"+self.toString(self.path)+">"
+    
+class Extractor(Object):
+  def __init__(self, path = None):
+    super(Extractor, self).__init__()
+    self.path = None
+    if (type(path) == Path):
+      self.path = path
+      
+  def getContent(self):
+    return self.path.getContent()
+    
+  def perform(self, owner):
+    owner.getContext().log(None, "Extracting \""+self.toString(self.path)+"\"...")
+    if (self.path == None):
       return False
     content = self.getContent().strip()
     if (len(content) == 0):
@@ -452,6 +601,7 @@ class Extract(Object):
     extension = filename[index:]
     filename = filename[:index]
     if (os.path.exists(os.path.join(path, filename))):
+      owner.getContext().log(None, "Extracted \""+self.toString(self.path)+"\"!")
       return True
     if (extension == ".zip"):
       if not (unzip(content, os.path.join(path, filename))):
@@ -461,11 +611,12 @@ class Extract(Object):
         return False
     else:
       return False
+    owner.getContext().log(None, "Extracted \""+self.toString(self.path)+"\"!")
     return True
     
   def __str__(self):
-    return "<"+self.toString(self.string)+">"
-
+    return "<"+self.toString(self.path)+">"
+    
 class Branch(Object):
   def __init__(self, string = None):
     super(Branch, self).__init__()
@@ -961,15 +1112,45 @@ class CommandBuildInstruction(BuildInstruction):
     super(CommandBuildInstruction, self).__init__(arguments)
     self.string = None
     self.extracts = []
+    self.copies = []
+    self.deletes = []
+    self.writes = []
     
   def build(self, owner, path, subpath, installation, imports, variant):
+    mature = False
     if not (len(self.extracts) == 0):
       for i in range(len(self.extracts)):
         extract = self.extracts[i]
         if (extract == None):
           continue
-        if not (extract.perform()):
+        if not (extract.perform(owner.getContext())):
           return False
+      mature = True
+    if not (len(self.copies) == 0):
+      for i in range(len(self.copies)):
+        copy = self.copies[i]
+        if (copy == None):
+          continue
+        if not (copy.perform(owner.getContext())):
+          return False
+      mature = True
+    if not (len(self.deletes) == 0):
+      for i in range(len(self.deletes)):
+        delete = self.deletes[i]
+        if (delete == None):
+          continue
+        if not (delete.perform(owner.getContext())):
+          return False
+      mature = True
+    if not (len(self.writes) == 0):
+      for i in range(len(self.writes)):
+        wrote = self.writes[i]
+        if (wrote == None):
+          continue
+        if not (wrote.perform(owner.getContext())):
+          return False
+      mature = True
+    if (mature):
       return True
     if (self.string == None):
       return False
@@ -990,7 +1171,7 @@ class CommandBuildInstruction(BuildInstruction):
     return True
     
   def __str__(self):
-    return "<"+self.toString(self.string)+">"
+    return "<"+self.toString(self.string)+", "+self.toString(self.extracts)+", "+self.toString(self.copies)+", "+self.toString(self.deletes)+">"
     
 class Setter(BuildInstruction):
   def __init__(self, key = None, value = None):
@@ -1004,6 +1185,7 @@ class Setter(BuildInstruction):
       
   def build(self, owner, path, subpath, installation, imports, variant):
     if not ((self.key == None) or (self.value == None)):
+      owner.getContext().data[self.key.getContent()] = self.value.getContent()
       owner.getContext().environment[self.key.getContent()] = self.value.getContent()
       owner.getContext().log(self.node, "<\""+self.key.getContent()+"\" -> \""+self.value.getContent()+"\">")
       return True
@@ -1829,6 +2011,8 @@ class LibraryTarget(Target):
 class Project(Element):
   def __init__(self, dependencies = None, targets = None, directory = None, context = None):
     super(Project, self).__init__()
+    self.pre = None
+    self.post = None
     self.dependencies = None
     self.targets = None
     self.directory = None
@@ -1843,12 +2027,28 @@ class Project(Element):
     if (str(type(context)) == "Context"):
       self.context = context
       
+  def buildPre(self, variant):
+    if (self.pre == None):
+      return True
+    if not (self.pre.build(self, os.path.join(self.directory.getContent(), os.path.basename(self.directory.getContent())), self.directory.getContent(), os.path.join(self.directory.getContent(), "install"), {}, variant)):
+      return False
+    return True
+    
+  def buildPost(self, variant):
+    if (self.post == None):
+      return True
+    if not (self.post.build(self, os.path.join(self.directory.getContent(), os.path.basename(self.directory.getContent())), self.directory.getContent(), os.path.join(self.directory.getContent(), "install"), {}, variant)):
+      return False
+    return True
+      
   def build(self, owner, variant):
     self.owner = owner
     if not (self.dependencies == None):
       self.dependencies.owner = self
     if not (self.targets == None):
       self.targets.owner = self
+    if not (self.buildPre(variant)):
+      return False
     if not (self.dependencies == None):
       if not (self.dependencies.build(self, variant)):
         return False
@@ -1869,6 +2069,8 @@ class Project(Element):
     if not (self.targets == None):
       if not (self.targets.distribute(self, distribution, variant)):
         return False
+    if not (self.buildPost(variant)):
+      return False
     return True
     
   def getExports(self, imports, variant, need):
@@ -1894,6 +2096,9 @@ class Project(Element):
   def getContext(self):
     return self.context
     
+  def getDistribution(self):
+    return self.owner.context.root.getDisribution()
+    
   def __str__(self):
     return "<"+self.toString(self.dependencies)+", "+self.toString(self.targets)+", "+self.toString(self.directory)+">"
 
@@ -1913,15 +2118,18 @@ class Buildster(Element):
   def build(self, owner, variant):
     return True
     
+  def getDisribution(self):
+    return self.distribution
+    
   def __str__(self):
     return "<"+self.toString(self.directory)+", "+self.toString(self.distribution)+">"
 
 class Context(Element):
-  def __init__(self, data, debug = True):
+  def __init__(self, data, variant, debug = True):
     super(Context, self).__init__()
     
 
-    self.variant = "Debug"
+    self.variant = variant
 
 
     self.extensions = []
@@ -1957,6 +2165,12 @@ class Context(Element):
     self.libraries.append("dylib")
     self.libraries.append("so")
     
+    self.substitutes = []
+    
+    self.substitutes.append("distribution")
+    self.substitutes.append("origin")
+    self.substitutes.append("install")
+    
     self.conditionals = []
     
     self.conditionals.append("if")
@@ -1964,13 +2178,18 @@ class Context(Element):
     self.conditionals.append("switch")
     
     self.nonconditionals = []
+    
+    self.nonconditionals.append("log")
+    self.nonconditionals.append("read")
+    self.nonconditionals.append("json")
     self.nonconditionals.append("data")
-    self.nonconditionals.append("install")
-    self.nonconditionals.append("origin")
     self.nonconditionals.append("case")
     self.nonconditionals.append("default")
     self.nonconditionals.append("search")
     self.nonconditionals.append("set")
+    for substitute in self.substitutes:
+      if not (substitute in self.nonconditionals):
+        self.nonconditionals.append(substitute)
     
     self.processes = []
     
@@ -1982,10 +2201,6 @@ class Context(Element):
     
     nodeTags = []
     
-    for conditional in self.conditionals:
-      nodeTags.append(conditional)
-    for process in self.processes:
-      nodeTags.append(process)
     nodeTags.append("case")
     nodeTags.append("default")
     nodeTags.append("else")
@@ -2028,18 +2243,35 @@ class Context(Element):
     nodeTags.append("import")
     nodeTags.append("install")
     nodeTags.append("origin")
+    nodeTags.append("distribution")
     nodeTags.append("root")
     nodeTags.append("work")
     nodeTags.append("shells")
     nodeTags.append("shell")
     nodeTags.append("commands")
     nodeTags.append("command")
+    nodeTags.append("write")
     nodeTags.append("extract")
+    nodeTags.append("copy")
+    nodeTags.append("delete")
+    nodeTags.append("from")
+    nodeTags.append("to")
+    nodeTags.append("destination")
+    nodeTags.append("content")
     nodeTags.append("search")
     nodeTags.append("term")
     nodeTags.append("set")
     nodeTags.append("pre")
     nodeTags.append("post")
+    for conditional in self.conditionals:
+      if not (conditional in nodeTags):
+        nodeTags.append(conditional)
+    for nonconditional in self.nonconditionals:
+      if not (nonconditional in nodeTags):
+        nodeTags.append(nonconditional)
+    for process in self.processes:
+      if not (process in nodeTags):
+        nodeTags.append(process)
     
     nodeParents = {}
     nodeAttributes = {}
@@ -2058,11 +2290,15 @@ class Context(Element):
     
     nodeParents["set"].append(self.any)
     nodeParents["search"].append(self.any)
+    nodeParents["distribution"].append(self.any)
     nodeParents["origin"].append(self.any)
     nodeParents["install"].append(self.any)
     nodeParents["message"].append(self.any)
     nodeParents["quit"].append(self.any)
     nodeParents["data"].append(self.any)
+    nodeParents["json"].append(self.any)
+    nodeParents["read"].append(self.any)
+    nodeParents["log"].append(self.any)
     nodeParents["if"].append(self.any)
     nodeParents["if_check"].append(self.any)
     nodeParents["switch"].append(self.any)
@@ -2117,16 +2353,28 @@ class Context(Element):
     nodeParents["root"].append("search")
     nodeParents["term"].append("search")
     nodeParents["work"].append("shell")
+    nodeParents["shells"].append("pre")
+    nodeParents["shells"].append("post")
     nodeParents["shells"].append("build")
     nodeParents["shell"].append("shells")
     nodeParents["commands"].append("shell")
     nodeParents["command"].append("commands")
     nodeParents["extract"].append("command")
+    nodeParents["copy"].append("command")
+    nodeParents["delete"].append("command")
+    nodeParents["write"].append("command")
+    nodeParents["from"].append("copy")
+    nodeParents["to"].append("copy")
+    nodeParents["destination"].append("write")
+    nodeParents["content"].append("write")
+    nodeParents["pre"].append("project")
+    nodeParents["post"].append("project")
     nodeParents["pre"].append("build")
     nodeParents["post"].append("build")
     nodeParents["pre"].append("target")
     nodeParents["post"].append("target")
     
+    nodeAttributes["json"].append(["key", False])
     nodeAttributes["data"].append(["id", False])
     nodeAttributes["if"].append(["id", False])
     nodeAttributes["if_check"].append(["id", False])
@@ -2159,7 +2407,9 @@ class Context(Element):
     self.debug = debug
     self.tier = 0
     self.root = None
+    self.context = self
     self.nodes = {}
+    self.logs = []
     self.records = []
     self.projects = []
     self.labels = []
@@ -2171,6 +2421,8 @@ class Context(Element):
       self.data["BUILDSTER_OS"] = platform.system()
       if (("msys" in self.data["BUILDSTER_OS"].lower()) or ("cygwin" in self.data["BUILDSTER_OS"].lower())):
         self.data["BUILDSTER_OS"] = "Windows"
+    if not ("BUILDSTER_VARIANT" in self.data):
+      self.data["BUILDSTER_VARIANT"] = self.variant
     
   def build(self, owner, variant):
     self.tier = None
@@ -2244,11 +2496,14 @@ class Context(Element):
     now = datetime.now()
     if not (self.debug):
       return
-    print(tag+now.strftime("%d-%m-%Y@%H:%M:%S")+"\n")
+    self.logs.append(tag+now.strftime("%d-%m-%Y@%H:%M:%S")+"\n")
+    print(self.logs[len(self.logs)-1])
     if (self.tier == None):
-      print("\""+str(message.strip())+"\"\n")
+      self.logs.append("\""+str(message.strip())+"\"\n")
+      print(self.logs[len(self.logs)-1])
       return
-    print(("  "*self.tier)+str(self.tier)+": \""+str(message.strip())+"\"")
+    self.logs.append(("  "*self.tier)+str(self.tier)+": \""+str(message.strip())+"\"")
+    print(self.logs[len(self.logs)-1])
   
   def record(self, node, message):
     self.records.append([self.tier, message, node])
@@ -2256,14 +2511,24 @@ class Context(Element):
   def report(self):
     self.tier = None
     self.log(None, "CONTEXT_REPORT_BEGIN\n")
-    for i in range(len(self.records)):
-      self.tier = self.records[i][0]
-      self.log(self.records[i][2], self.records[i][1])
+    length = len(self.records)
+    for i in range(length):
+      record = self.records[i]
+      self.tier = record[0]
+      self.log(record[2], record[1])
     self.tier = None
     self.log(None, "CONTEXT_REPORT_END\n")
     
   def getContext(self):
     return self
+    
+  def getLogs(self):
+    logs = ""
+    length = len(self.logs)
+    for i in range(length):
+      log = self.logs[i]
+      logs += log
+    return logs
 
 def handle(context, node, tier, parents):
   parent = parents[len(parents)-1]
@@ -2429,12 +2694,16 @@ def handle(context, node, tier, parents):
       result = False
     elif (tag == "buildster"):
       element = Buildster()
+      element.context = context
       element.directory = Path(String(node.attrib["directory"]))
       element.distribution = Path(String(node.attrib["distribution"]))
       context.root = element
     elif (tag == "project"):
       element = Project()
+      element.context = context
       element.directory = Path(String(node.attrib["directory"]))
+      if not (element in context.projects):
+        context.projects.append(element)
     elif (tag == "dependencies"):
       element = DependencyList()
     elif (tag == "targets"):
@@ -2473,8 +2742,22 @@ def handle(context, node, tier, parents):
       element = CommandsBuildInstruction()
     elif (tag == "command"):
       element = CommandBuildInstruction()
+    elif (tag == "destination"):
+      element = Destination()
+    elif (tag == "content"):
+      element = Content()
+    elif (tag == "write"):
+      element = Writer()
+    elif (tag == "delete"):
+      element = Deleter()
     elif (tag == "extract"):
-      element = Extract()
+      element = Extractor()
+    elif (tag == "copy"):
+      element = Copier()
+    elif (tag == "from"):
+      element = CopierSource()
+    elif (tag == "to"):
+      element = CopierDestination()
     elif (tag == "definition"):
       element = Definition()
     elif (tag == "definitions"):
@@ -2501,7 +2784,7 @@ def handle(context, node, tier, parents):
         break
       if (child.tag in context.conditionals):
         output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-      elif (child.tag in context.nonconditionals):
+      elif ((child.tag in context.nonconditionals) or (child.tag in context.substitutes)):
         output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
       for key in call[2]:
         value = call[2][key]
@@ -2759,6 +3042,18 @@ def handle(context, node, tier, parents):
       elif (tag == "term"):
         output = ensure(node.text)+flatten(output).strip()
         element.string = String(output.strip())
+      elif (tag == "from"):
+        output = ensure(node.text)+flatten(output).strip()
+        element.path = Path(String(output.strip()))
+      elif (tag == "to"):
+        output = ensure(node.text)+flatten(output).strip()
+        element.path = Path(String(output.strip()))
+      elif (tag == "destination"):
+        output = ensure(node.text)+flatten(output).strip()
+        element.path = Path(String(output.strip()))
+      elif (tag == "content"):
+        output = ensure(node.text)+flatten(output).strip()
+        element.string = String(output.strip())
       elif (tag == "shells"):
         if ("shell" in elements):
           for shell in elements["shell"]:
@@ -2787,9 +3082,48 @@ def handle(context, node, tier, parents):
           for extract in elements["extract"]:
             element.extracts.append(extract)
           elements["extract"] = None
+        if ("copy" in elements):
+          for copy in elements["copy"]:
+            element.copies.append(copy)
+          elements["copy"] = None
+        if ("delete" in elements):
+          for delete in elements["delete"]:
+            element.deletes.append(delete)
+          elements["delete"] = None
+        if ("write" in elements):
+          for wrote in elements["write"]:
+            element.writes.append(wrote)
+          elements["write"] = None
+      elif (tag == "write"):
+        if ("destination" in elements):
+          for destination in elements["destination"]:
+            element.destination = destination
+            break
+          elements["destination"] = None
+        if ("content" in elements):
+          for content in elements["content"]:
+            element.content = content
+            break
+          elements["content"] = None
+      elif (tag == "copy"):
+        if ("from" in elements):
+          for source in elements["from"]:
+            element.source = source
+            break
+          elements["from"] = None
+        if ("to" in elements):
+          for destination in elements["to"]:
+            element.destination = destination
+            break
+          elements["to"] = None
       elif (tag == "extract"):
         output = ensure(node.text)+flatten(output).strip()
-        element.string = String(output.strip())
+        element.path = Path(String(output.strip()))
+      elif (tag == "delete"):
+        output = ensure(node.text)+flatten(output).strip()
+        element.path = Path(String(output.strip()))
+      elif (tag == "distribution"):
+        output = adjust(os.path.join(wd(), context.root.directory.getContent(), context.root.distribution.getContent(), context.variant.lower())).replace("\\", "/")
       elif (tag == "install"):
         dependency = get_parent(parents, "dependency")
         if not (dependency == None):
@@ -2798,7 +3132,7 @@ def handle(context, node, tier, parents):
             project = get_parent(parents, "project")
             if not (project == None):
               temp = handle(context, label, tier, [None])
-              output = adjust(os.path.join(wd(), context.root.getContent(), project.attrib["directory"], "install", "dependencies", temp[1], context.variant.lower())).replace("\\", "/")
+              output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "dependencies", temp[1], context.variant.lower())).replace("\\", "/")
             else:
               context.log(node, "No \"project\" ancestor for \"label\" node!\n")
               result = False
@@ -2821,8 +3155,12 @@ def handle(context, node, tier, parents):
               context.log(node, "No \"label\" descendant for \"target\" node!\n")
               result = False
           else:
-            context.log(node, "No \"dependency\" or \"target\" ancestor for \"install\" node!\n")
-            result = False
+            project = get_parent(parents, "project")
+            if not (project == None):
+              output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"])).replace("\\", "/")
+            else:
+              context.log(node, "No \"dependency\", \"target\", or \"project\" ancestor for \"install\" node!\n")
+              result = False
       elif (tag == "origin"):
         dependency = get_parent(parents, "dependency")
         if not (dependency == None):
@@ -2854,11 +3192,26 @@ def handle(context, node, tier, parents):
               context.log(node, "No \"label\" descendant for \"target\" node!\n")
               result = False
           else:
-            context.log(node, "No \"dependency\" or \"target\" ancestor for \"origin\" node!\n")
-            result = False
+            project = get_parent(parents, "project")
+            if not (project == None):
+              output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"])).replace("\\", "/")
+            else:
+              context.log(node, "No \"dependency\", \"target\", or \"project\" ancestor for \"origin\" node!\n")
+              result = False
       elif (tag == "default"):
         output = ensure(node.text)+flatten(output).strip()
         output = output.strip()
+        context.log(node, output+"\n")
+      elif (tag == "log"):
+        output = ensure(context.getLogs()).strip()
+      elif (tag == "read"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = output.strip()
+        if (os.path.isfile(output)):
+          lines = read(output)
+          output = flatten(lines)
+        else:
+          output = ""
         context.log(node, output+"\n")
       elif (tag == "set"):
         element = Setter()
@@ -2877,16 +3230,30 @@ def handle(context, node, tier, parents):
         for key in elements:
           for value in elements[key]:
             element.instructions.append(value)
+        if (parent.tag == "project"):
+          context.projects[len(context.projects)-1].pre = element
+          context.projects[len(context.projects)-1].buildPre(context.variant)
       elif (tag == "post"):
         element = PostBuildInstruction()
         for key in elements:
           for value in elements[key]:
             element.instructions.append(value)
+        if (parent.tag == "project"):
+          context.projects[len(context.projects)-1].post = element
+          context.projects[len(context.projects)-1].buildPost(context.variant)
       else:
         success = False
     else:
       if (tag == "data"):
         output = ensure(context.get(node.attrib["id"])).strip()
+        context.log(node, output+"\n")
+      elif (tag == "json"):
+        output = ensure(node.text)+flatten(output).strip()
+        dictionary = json.loads(output.strip())
+        if (node.attrib["key"] in dictionary):
+          output = dictionary[node.attrib["key"]]
+        else:
+          output = ""
         context.log(node, output+"\n")
       elif (tag == "case"):
         output = ensure(node.text)+flatten(output).strip()
@@ -2899,6 +3266,18 @@ def handle(context, node, tier, parents):
         if ("targets" in elements):
           element.targets = elements["targets"][0]
           elements["targets"][0] = None
+        if ("pre" in elements):
+          for pre in elements["pre"]:
+            element.pre = pre
+            break
+          elements["pre"] = None
+          element.buildPre(context.variant)
+        if ("post" in elements):
+          for post in elements["post"]:
+            element.post = post
+            break
+          elements["post"] = None
+          element.buildPost(context.variant)
         context.log(node, element.toString()+"\n")
       elif (tag == "buildster"):
         context.log(node, element.toString()+"\n")
@@ -2995,7 +3374,9 @@ def handle(context, node, tier, parents):
       if not (element == None):
         element.node = node
         if (type(element) == Project):
-          context.projects.append(element)
+          if not (element in context.projects):
+            context.projects.append(element)
+          element.owner = context.root
           element.context = context
           context.record(node, element.toString()+"\n")
         elif (type(element) == Buildster):
@@ -3009,8 +3390,9 @@ def handle(context, node, tier, parents):
             elements[tag].append(element)
     else:
       if not (children):
-        output = ensure(node.text)+flatten(output).strip()
-        context.log(node, output+"\n")
+        if not (tag in context.substitutes):
+          output = ensure(node.text)+flatten(output).strip()
+          context.log(node, output+"\n")
   else:
     result = False
   if not (result):
@@ -3041,8 +3423,7 @@ def run(target, data):
     base = tree.getroot()
     if not (base.tag == "buildster"):
       return False
-    context = Context(dictionary)
-    context.variant = variant
+    context = Context(dictionary, variant)
     result = handle(context, base, 0, [None])
     if not (result[0]):
       context.report()
