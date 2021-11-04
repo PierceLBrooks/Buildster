@@ -1613,9 +1613,10 @@ class WGetDependency(RemoteDependency):
     
     
 class Target(Build):
-  def __init__(self, label = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None):
+  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None):
     super(Target, self).__init__()
     self.label = None
+    self.subpath = None
     self.importsContent = {}
     self.exportsContent = {}
     if (type(label) == Label):
@@ -1714,7 +1715,11 @@ class Target(Build):
       os.makedirs(path)
     project = unique(project+self.getFiles(owner))
     includes = unique(includes+self.getIncludes(owner))
-    if not (os.path.join(self.getPath(owner, None), "CMakeLists.txt").replace("\\", "/") in self.getFiles(owner, "CMakeLists\\.txt")):
+    files = self.getFiles(owner, "CMakeLists\\.txt")
+    temp = "."
+    if not (self.subpath == None):
+      temp = self.subpath.getContent()
+    if not ((os.path.join(self.getPath(owner, None), "CMakeLists.txt").replace("\\", "/") in files) or (os.path.join(self.getPath(owner, None), temp, "CMakeLists.txt").replace("\\", "/") in files)):
       descriptor = open(os.path.join(path, "CMakeLists.txt"), "w")
       write(descriptor, "cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)")
       write(descriptor, "set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)")
@@ -1819,7 +1824,10 @@ class Target(Build):
     return True
 
   def buildVariant(self, owner, generator, arguments, path, installation, variant):
-    result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build", variant.lower()).replace("\\", "/"), installation, variant)
+    if (self.subpath == None):
+      result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build", variant.lower()).replace("\\", "/"), installation, variant)
+    else:
+      result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, self.subpath.getContent()), os.path.join(path, "build", variant.lower()).replace("\\", "/"), installation, variant)
     owner.getContext().log(self.node, result)
     result = cmake_build(os.path.join(path, "build", variant.lower()).replace("\\", "/"))
     owner.getContext().log(self.node, result)
@@ -2312,6 +2320,7 @@ class Context(Element):
     nodeParents["remote"].append("dependency")
     nodeParents["local"].append("dependency")
     nodeParents["subpath"].append("dependency")
+    nodeParents["subpath"].append("target")
     nodeParents["path"].append("local")
     nodeParents["git_repo"].append("remote")
     nodeParents["wget"].append("remote")
@@ -3282,6 +3291,9 @@ def handle(context, node, tier, parents):
       elif (tag == "buildster"):
         context.log(node, element.toString()+"\n")
       elif (tag == "target"):
+        if ("subpath" in elements):
+          element.subpath = elements["subpath"][0]
+          elements["subpath"][0] = None
         if ("label" in elements):
           element.label = elements["label"][0]
           elements["label"][0] = None
