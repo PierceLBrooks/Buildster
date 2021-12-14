@@ -1673,6 +1673,7 @@ class Target(Build):
     imports = {}
     exports = {}
     includes = []
+    linkages = []
     project = []
     for i in range(len(owner.getDependencies().getContent())):
       dependency = owner.getDependencies().getContent()[i]
@@ -1694,6 +1695,7 @@ class Target(Build):
           if (label == self.imports.content[i].getContent()):
             if not (label in imports):
               if ("Target" in str(type(labels[label]))):
+                linkages = linkages+labels[label].getLinkages(owner)
                 includes = includes+labels[label].getIncludes(owner)
               imports[label] = []
               if not (labels[label].exports == None):
@@ -1752,6 +1754,10 @@ class Target(Build):
                 break
         else:
           pass
+      for i in range(len(linkages)):
+        linkage = linkages[i]
+        links.append(linkage.replace("\\", "/"))
+        write(descriptor, "link_directories(\""+relativize(base, links[len(links)-1])+"\")")
       if not (self.links == None):
         for i in range(len(self.links.content)):
           link = self.links.content[i].getContent().strip()
@@ -1889,6 +1895,13 @@ class Target(Build):
   def getIncludes(self, owner):
     result = []
     path = self.getPath(owner, None)
+    for root, folders, files in os.walk(path):
+      result.append(root)
+    return result
+    
+  def getLinkages(self, owner):
+    result = []
+    path = self.getPath(owner, "install")
     for root, folders, files in os.walk(path):
       result.append(root)
     return result
