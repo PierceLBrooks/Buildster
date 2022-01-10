@@ -192,6 +192,7 @@ def git_checkout(repo_branch, environment = None):
   command = []
   command.append("git")
   command.append("checkout")
+  command.append("-f")
   command.append(repo_branch)
   result = execute_command(command, environment)
   return result
