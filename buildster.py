@@ -1810,17 +1810,17 @@ class Target(Build):
     arguments = []
     if not (self.arguments == None):
       arguments = self.arguments.getContent()
-      exports = owner.getExports(self.importsContent, variant, [self])
-      if (variant in self.importsContent):
-        for i in range(len(exports)):
-          export = exports[i]
-          if (export[0] in self.importsContent[variant]):
-            export = export[1]
-            for key in export:
-              if (export[key][0] == "other"):
-                arguments.append("-D"+key+"=\""+export[key][1].replace("\\", "/")+"\"")
-              else:
-                arguments.append("-D"+key+"="+export[key][1].replace("\\", "/"))
+    exports = owner.getExports(self.importsContent, variant, [self])
+    if (variant in self.importsContent):
+      for i in range(len(exports)):
+        export = exports[i]
+        if (export[0] in self.importsContent[variant]):
+          export = export[1]
+          for key in export:
+            if (export[key][0] == "other"):
+              arguments.append("-D"+key+"=\""+export[key][1].replace("\\", "/")+"\"")
+            else:
+              arguments.append("-D"+key+"="+export[key][1].replace("\\", "/"))
     success = self.buildVariant(owner, generator, arguments, path, installation, variant)
     if not (success):
       return False
