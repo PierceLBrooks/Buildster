@@ -235,6 +235,8 @@ def cmake_build(path, environment = None):
   
 def cmake_install(path, installation, environment = None):
   command = []
+  if not (platform.system() == "Windows"):
+    command.append("sudo")
   command.append("cmake")
   command.append("--build")
   command.append(path)
