@@ -991,7 +991,6 @@ class CmakeBuildInstruction(BuildInstruction):
       return False
     cmake = self.getPath(path, subpath)
     arguments = self.arguments.getContent()
-    arguments.append("-DCMAKE_BUILD_WITH_INSTALL_RPATH=\"TRUE\"")
     exports = owner.getExports(imports, variant, [self])
     if (variant in imports):
       for i in range(len(exports)):
@@ -1727,7 +1726,6 @@ class Target(Build):
     if not ((os.path.join(self.getPath(owner, None), "CMakeLists.txt").replace("\\", "/") in files) or (os.path.join(self.getPath(owner, None), temp, "CMakeLists.txt").replace("\\", "/") in files)):
       descriptor = open(os.path.join(path, "CMakeLists.txt"), "w")
       write(descriptor, "cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)")
-      write(descriptor, "set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)")
       write(descriptor, "set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} -std=c++14\")")
       write(descriptor, "set(CMAKE_EXE_LINKER_FLAGS \"${CMAKE_EXE_LINKER_FLAGS} -std=c++14\")")
       write(descriptor, "set(CMAKE_SHARED_LINKER_FLAGS \"${CMAKE_SHARED_LINKER_FLAGS} -std=c++14\")")
@@ -1791,6 +1789,8 @@ class Target(Build):
               break
         if ("Executable" in target):
           write(descriptor, "add_executable("+self.label.getContent()+" ${FILES})")
+          if (platform.system() == "Darwin"):
+            write(descriptor, "add_custom_command(TARGET "+self.label.getContent()+" POST_BUILD COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath \"@executable_path/\" $<TARGET_FILE:"+self.label.getContent()+"> || :)")
         elif ("Library" in target):
           write(descriptor, "add_library("+self.label.getContent()+" ${FILES})")
           write(descriptor, "set_target_properties("+self.label.getContent()+" PROPERTIES PUBLIC_HEADER \"${HEADERS}\")")
