@@ -1849,9 +1849,37 @@ class Target(Build):
     installation = find(os.path.join(self.getPath(owner, "install"), variant.lower()).replace("\\", "/"), self.label.getContent())
     if (installation == None):
       return False
-    if not (copy(installation.replace("\\", "/"), os.path.join(distribution, variant.lower(), os.path.basename(installation)).replace("\\", "/"))):
+    source = installation.replace("\\", "/")
+    destination = os.path.join(distribution, variant.lower(), os.path.basename(installation)).replace("\\", "/")
+    if not (copy(source, destination)):
       return False
-    return True
+    if not (platform.system() == "Linux"):
+      return True
+    target = str(type(self))
+    success = True
+    if ("Executable" in target):
+      if (os.path.exists(destination)):
+        if (os.path.isfile(destination)):
+          patcher = None
+          try:
+            patcher = importlib.import_module("pypatchelf")
+          except:
+            patcher = None
+          if not (patcher == None):
+            try:
+              command = []
+              command.append(patcher.PATCHELF)
+              command.append("--set-rpath")
+              command.append("$ORIGIN")
+              command.append(destination)
+              result = execute_command(command)
+              owner.getContext().log(self.node, result)
+              success = True
+            except:
+              success = False
+          else:
+            success = False
+    return success
 
   def doExport(self, key, value, export, variant, exceptions):
     if not (variant in self.exportsContent):
@@ -2173,8 +2201,10 @@ class Context(Element):
     self.extensions.append("inl")
     self.extensions.append("dll")
     self.extensions.append("a")
+    self.extensions.append("so")
     self.extensions.append("lib")
     self.extensions.append("dylib")
+    self.extensions.append("exe")
     
     self.headers = []
     
