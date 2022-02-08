@@ -5,6 +5,7 @@ import re
 import os
 import sys
 import json
+import stat
 import wget
 import shlex
 import shutil
@@ -13,6 +14,7 @@ import tarfile
 import inspect
 import logging
 import platform
+import importlib
 import traceback
 import subprocess
 import xml.etree.ElementTree as xml_tree
@@ -2093,6 +2095,11 @@ class Project(Element):
     if not (self.targets == None):
       if not (self.targets.distribute(self, distribution, variant)):
         return False
+    for root, folders, files in os.walk(path):
+      for name in files:
+        target = os.path.join(root, name).replace("\\", "/")
+        status = os.stat(target)
+        os.chmod(target, status.st_mode|stat.S_IEXEC)
     if not (self.buildPost(variant)):
       return False
     return True
