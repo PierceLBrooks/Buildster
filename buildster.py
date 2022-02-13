@@ -342,7 +342,7 @@ class Build(Element):
     if (name == "Linux"):
       return "Unix Makefiles"
     if (name == "Darwin"):
-      return "Unix Makefiles"
+      return "Xcode"
     return ""
     
   def getLabel(self):
@@ -1274,7 +1274,7 @@ class Dependency(Build):
                     return False
     return True
     
-  def getPath(self, owner, purpose):
+  def getPath(self, owner, variant, purpose):
     return adjust(os.path.join(wd(), owner.getContext().root.directory.getContent(), owner.directory.getContent(), purpose, "dependencies", self.label.getContent()))
     
   def getLabel(self):
@@ -1382,8 +1382,8 @@ class LocalDependency(Dependency):
       self.path = path
     
   def build(self, owner, variant):
-    installation = self.getPath(owner, "install")
-    path = self.getPath(owner, "build")
+    installation = self.getPath(owner, None, "install")
+    path = self.getPath(owner, None, "build")
     success = super(LocalDependency, self).build(owner, variant)
     if not (success):
       return False
@@ -1493,8 +1493,8 @@ class GitRepoDependency(RemoteDependency):
     return True
     
   def build(self, owner, variant):
-    installation = self.getPath(owner, "install")
-    path = self.getPath(owner, "build")
+    installation = self.getPath(owner, None, "install")
+    path = self.getPath(owner, None, "build")
     success = self.clone(owner, path)
     if not (success):
       return False
@@ -1549,8 +1549,8 @@ class WGetDependency(RemoteDependency):
     if (self.string == None):
       return False
     content = self.string.getContent()
-    installation = self.getPath(owner, "install")
-    path = self.getPath(owner, "build")
+    installation = self.getPath(owner, None, "install")
+    path = self.getPath(owner, None, "build")
     if (content == None):
       return False
     content = content.strip()
@@ -1656,9 +1656,9 @@ class Target(Build):
     return True
     
   def build(self, owner, variant):
-    installation = self.getPath(owner.owner, "install")
-    subpath = self.getPath(owner.owner, None)
-    path = self.getPath(owner.owner, "build")
+    installation = self.getPath(owner.owner, variant, "install")
+    subpath = self.getPath(owner.owner, variant, None)
+    path = self.getPath(owner.owner, variant, "build")
     success = True
     if not (self.imports == None):
       success = self.imports.doImport(self, variant)
@@ -1725,7 +1725,7 @@ class Target(Build):
     temp = "."
     if not (self.subpath == None):
       temp = self.subpath.getContent()
-    if not ((os.path.join(self.getPath(owner, None), "CMakeLists.txt").replace("\\", "/") in files) or (os.path.join(self.getPath(owner, None), temp, "CMakeLists.txt").replace("\\", "/") in files)):
+    if not ((os.path.join(self.getPath(owner, variant, None), "CMakeLists.txt").replace("\\", "/") in files) or (os.path.join(self.getPath(owner, variant, None), temp, "CMakeLists.txt").replace("\\", "/") in files)):
       descriptor = open(os.path.join(path, "CMakeLists.txt"), "w")
       write(descriptor, "cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)")
       write(descriptor, "set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} -std=c++14\")")
@@ -1803,7 +1803,7 @@ class Target(Build):
         return False
       descriptor.close()
     else:
-      path = self.getPath(owner, None)
+      path = self.getPath(owner, variant, None)
     generator = None
     if (self.generator == None):
       generator = self.getGenerator(owner)
@@ -1846,7 +1846,7 @@ class Target(Build):
     return success
     
   def distribute(self, owner, distribution, variant):
-    installation = find(os.path.join(self.getPath(owner, "install"), variant.lower()).replace("\\", "/"), self.label.getContent())
+    installation = find(os.path.join(self.getPath(owner, variant, "install"), variant.lower()).replace("\\", "/"), self.label.getContent())
     if (installation == None):
       return False
     source = installation.replace("\\", "/")
@@ -1903,17 +1903,19 @@ class Target(Build):
     exportsContent = self.filterExports(self.exportsContent[variant], need)
     return exportsContent
     
-  def getPath(self, owner, purpose):
+  def getPath(self, owner, variant, purpose):
     if (purpose == None):
       return adjust(os.path.join(wd(), owner.directory.getContent(), self.label.getContent()))
-    return adjust(os.path.join(wd(), owner.getContext().root.directory.getContent(), owner.directory.getContent(), purpose, "targets", self.label.getContent()))
+    if (variant == None):
+      return adjust(os.path.join(wd(), owner.getContext().root.directory.getContent(), owner.directory.getContent(), purpose, "targets", self.label.getContent()))
+    return adjust(os.path.join(wd(), owner.getContext().root.directory.getContent(), owner.directory.getContent(), purpose, "targets", self.label.getContent(), variant.lower()))
     
   def getLabel(self):
     return self.label.getContent()
     
   def getFiles(self, owner, filter = None):
     result = []
-    path = self.getPath(owner, None)
+    path = self.getPath(owner, None, None)
     for root, folders, files in os.walk(path):
       for name in files:
         if not (filter == None):
@@ -1927,14 +1929,14 @@ class Target(Build):
 
   def getIncludes(self, owner):
     result = []
-    path = self.getPath(owner, None)
+    path = self.getPath(owner, None, None)
     for root, folders, files in os.walk(path):
       result.append(root)
     return result
     
   def getLinkages(self, owner):
     result = []
-    path = self.getPath(owner, "install")
+    path = self.getPath(owner, None, "install")
     for root, folders, files in os.walk(path):
       result.append(root)
     return result
