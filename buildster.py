@@ -227,21 +227,27 @@ def cmake_configure(generator, arguments, source, path, installation, variant, e
   os.chdir(cwd)
   return result
   
-def cmake_build(path, environment = None):
+def cmake_build(path, variant, environment = None):
   command = []
   command.append("cmake")
   command.append("--build")
   command.append(path)
+  if not (variant == None):
+    command.append("--config")
+    command.append(variant)
   result = execute_command(command, environment)
   return result
   
-def cmake_install(path, installation, environment = None):
+def cmake_install(path, variant, installation, environment = None):
   command = []
   if not (platform.system() == "Windows"):
     command.append("sudo")
   command.append("cmake")
   command.append("--build")
   command.append(path)
+  if not (variant == None):
+    command.append("--config")
+    command.append(variant)
   command.append("--target")
   command.append("install")
   result = execute_command(command, environment)
@@ -1018,7 +1024,7 @@ class CmakeBuildInstruction(BuildInstruction):
     path = os.path.join(cmake, variant.lower()).replace("\\", "/")
     result = cmake_configure(self.generator.getContent(), arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, "..", self.source.getContent()).replace("\\", "/"), path, installation, variant)
     owner.getContext().log(self.node, result)
-    result = cmake_build(os.path.join(cmake, variant.lower()).replace("\\", "/"))
+    result = cmake_build(os.path.join(cmake, variant.lower()).replace("\\", "/"), variant)
     owner.getContext().log(self.node, result)
     return True
     
@@ -1029,7 +1035,7 @@ class CmakeBuildInstruction(BuildInstruction):
     return True
 
   def installVariant(self, owner, cmake, installation, variant):
-    result = cmake_install(os.path.join(cmake, variant.lower()).replace("\\", "/"), os.path.join(installation, variant.lower()).replace("\\", "/"))
+    result = cmake_install(os.path.join(cmake, variant.lower()).replace("\\", "/"), variant, os.path.join(installation, variant.lower()).replace("\\", "/"))
     owner.getContext().log(self.node, result)
     return True
     
@@ -1650,8 +1656,8 @@ class Target(Build):
     if (type(arguments) == ArgumentList):
       self.arguments = arguments
       
-  def install(self, owner, path, installation):
-    result = cmake_install(path, installation)
+  def install(self, owner, path, installation, variant):
+    result = cmake_install(path, variant, installation)
     owner.getContext().log(self.node, result)
     return True
     
@@ -1840,9 +1846,9 @@ class Target(Build):
     else:
       result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, self.subpath.getContent()), os.path.join(path, "build", variant.lower()).replace("\\", "/"), installation, variant)
     owner.getContext().log(self.node, result)
-    result = cmake_build(os.path.join(path, "build", variant.lower()).replace("\\", "/"))
+    result = cmake_build(os.path.join(path, "build", variant.lower()).replace("\\", "/"), variant)
     owner.getContext().log(self.node, result)
-    success = self.install(owner, os.path.join(path, "build", variant.lower()).replace("\\", "/"), os.path.join(installation, variant.lower()).replace("\\", "/"))
+    success = self.install(owner, os.path.join(path, "build", variant.lower()).replace("\\", "/"), os.path.join(installation, variant.lower()).replace("\\", "/"), variant)
     return success
     
   def distribute(self, owner, distribution, variant):
