@@ -760,15 +760,49 @@ class ArgumentList(List):
       return False
     return super(ArgumentList, self).add(argument)
     
+class Package(Element):
+  def __init__(self, label = None, exports = None):
+    super(Package, self).__init__()
+    self.label = Label(String(""))
+    if (type(label) == Label):
+      self.label = label
+    self.exports = None
+    if (type(exports) == ExportList):
+      self.exports = exports
+      
+  def build(self, owner, variant):
+    return True
+    
+  def getContent(self):
+    return self.label.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.label)+", "+self.toString(self.exports)+">"
+    
+class PackageList(List):
+  def __init__(self):
+    super(PackageList, self).__init__()
+    
+  def build(self, owner, variant):
+    return True
+        
+  def addPackage(self, package):
+    if not (isinstance(package, Package)):
+      return False
+    return super(PackageList, self).add(package)
+    
 class Definition(Object):
   def __init__(self, key = None, value = None):
     super(Definition, self).__init__()
-    self.key = None
+    self.key = Key(String(""))
     if (type(key) == Key):
       self.key = key
-    self.value = None
+    self.value = Value(String(""))
     if (type(value) == Value):
       self.value = value
+      
+  def getContent(self):
+    return self.key.getContent()+"="+self.value.getContent()
       
   def __str__(self):
     return "<"+self.toString(self.key)+", "+self.toString(self.value)+">"
@@ -1330,6 +1364,7 @@ class DependencyList(List):
     for i in range(length):
       if (isinstance(self.content[i], Dependency)):
         if not (self.content[i].build(self, variant)):
+          self.getContext().log(self.node, "Dependency build failure @ "+str(i)+"!")
           return False
     return True
     
@@ -1340,6 +1375,7 @@ class DependencyList(List):
     for i in range(length):
       if (isinstance(self.content[i], Dependency)):
         if not (self.content[i].distribute(self, distribution, variant)):
+          self.getContext().log(self.node, "Dependency distribution failure @ "+str(i)+"!")
           return False
     return True
         
@@ -1623,7 +1659,7 @@ class WGetDependency(RemoteDependency):
     
     
 class Target(Build):
-  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None):
+  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None):
     super(Target, self).__init__()
     self.label = None
     self.subpath = None
@@ -1655,6 +1691,9 @@ class Target(Build):
     self.arguments = None
     if (type(arguments) == ArgumentList):
       self.arguments = arguments
+    self.packages = None
+    if (type(packages) == PackageList):
+      self.packages = packages
       
   def install(self, owner, path, installation, variant):
     result = cmake_install(path, variant, installation)
@@ -1662,6 +1701,7 @@ class Target(Build):
     return True
     
   def build(self, owner, variant):
+    context = owner.owner.getContext()
     installation = self.getPath(owner.owner, variant, "install")
     subpath = self.getPath(owner.owner, variant, None)
     path = self.getPath(owner.owner, variant, "build")
@@ -1669,13 +1709,16 @@ class Target(Build):
     if not (self.imports == None):
       success = self.imports.doImport(self, variant)
     if not (success):
+      context.log(self.node, "Import failure!")
       return False
     if not (self.exports == None):
       success = self.exports.doExport(self, variant)
     if not (success):
+      context.log(self.node, "Export failure!")
       return False
     success = super(Target, self).build(owner.owner, variant)
     if not (success):
+      context.log(self.node, "Super build failure!")
       return False
     links = []
     builds = []
@@ -1685,6 +1728,8 @@ class Target(Build):
     includes = []
     linkages = []
     project = []
+    packages = []
+    definitions = []
     for i in range(len(owner.getDependencies().getContent())):
       dependency = owner.getDependencies().getContent()[i]
       if not (dependency == self):
@@ -1722,9 +1767,14 @@ class Target(Build):
     if not (self.pre == None):
       success = self.pre.build(owner, subpath, path, installation, imports, variant)
     if not (success):
+      context.log(self.node, "Pre build step failure!")
       return False
     if not (os.path.isdir(path)):
       os.makedirs(path)
+    if not (self.packages == None):
+      packages = packages+self.packages.content
+    if not (self.definitions == None):
+      definitions = definitions+self.definitions.getContent()
     project = unique(project+self.getFiles(owner))
     includes = unique(includes+self.getIncludes(owner))
     files = self.getFiles(owner, "CMakeLists\\.txt")
@@ -1739,8 +1789,32 @@ class Target(Build):
       write(descriptor, "set(CMAKE_SHARED_LINKER_FLAGS \"${CMAKE_SHARED_LINKER_FLAGS} -std=c++14\")")
       write(descriptor, "project(\""+self.label.getContent()+"Project\")")
       base = path
+      for i in range(len(packages)):
+        package = packages[i]
+        if (package == None):
+          continue
+        write(descriptor, "find_package("+package.getContent()+" REQUIRED)")
+        if not (package.exports == None):
+          for j in range(len(package.exports.content)):
+            export = package.exports.content[j]
+            if (export == None):
+              continue
+            if (export.export == None):
+              continue
+            if (export.key == None):
+              continue
+            if (export.export.getContent() == "headers"):
+              write(descriptor, "include_directories(${"+export.key.getContent()+"})")
+            elif (export.export.getContent() == "libraries"):
+              write(descriptor, "link_libraries(${"+export.key.getContent()+"})")
+            else:
+              pass
+      for i in range(len(definitions)):
+        definition = definitions[i]
+        write(descriptor, "add_definitions(-D"+definition+")")
       for i in range(len(includes)):
-        write(descriptor, "include_directories(\""+relativize(base, includes[i].replace("\\", "/"))+"\")")
+        include = includes[i]
+        write(descriptor, "include_directories(\""+relativize(base, include.replace("\\", "/"))+"\")")
       for export in exports:
         if (exports[export][1] == "headers"):
           headers = exports[export][0].replace("\\", "/")
@@ -1806,6 +1880,7 @@ class Target(Build):
           pass
         write(descriptor, "install(TARGETS "+self.label.getContent()+")")
       else:
+        context.log(self.node, "Source failure!")
         return False
       descriptor.close()
     else:
@@ -1816,6 +1891,7 @@ class Target(Build):
     else:
       generator = self.generator.getContent()
     if (generator == None):
+      context.log(self.node, "Generator failure!")
       return False
     arguments = []
     if not (self.arguments == None):
@@ -1833,10 +1909,12 @@ class Target(Build):
               arguments.append("-D"+key+"="+export[key][1].replace("\\", "/"))
     success = self.buildVariant(owner, generator, arguments, path, installation, variant)
     if not (success):
+      context.log(self.node, "Build failure!")
       return False
     if not (self.post == None):
       success = self.post.build(owner, subpath, path, installation, imports, variant)
     if not (success):
+      context.log(self.node, "Post build step failure!")
       return False
     return True
 
@@ -1960,6 +2038,7 @@ class TargetList(List):
     for i in range(length):
       if (isinstance(self.content[i], Target)):
         if not (self.content[i].build(self, variant)):
+          self.getContext().log(self.node, "Target build failure @ "+str(i)+"!")
           return False
     return True
     
@@ -1970,6 +2049,7 @@ class TargetList(List):
     for i in range(length):
       if (isinstance(self.content[i], Target)):
         if not (self.content[i].distribute(self, distribution, variant)):
+          self.getContext().log(self.node, "Target distribution failure @ "+str(i)+"!")
           return False
     return True
         
@@ -2037,7 +2117,7 @@ class ExecutableTarget(Target):
     return True
     
   def __str__(self):
-    return "<"+self.toString(self.label)+", "+self.toString(self.definitions)+", "+self.toString(self.links)+", "+self.toString(self.imports)+">"
+    return "<"+self.toString(self.label)+", "+self.toString(self.definitions)+", "+self.toString(self.links)+", "+self.toString(self.imports)+", "+self.toString(self.arguments)+", "+self.toString(self.packages)+">"
     
 class LibraryTarget(Target):
   def __init__(self, label = None, definitions = None, links = None, imports = None, exports = None):
@@ -2110,12 +2190,15 @@ class Project(Element):
     if not (self.targets == None):
       self.targets.owner = self
     if not (self.buildPre(variant)):
+      self.context.log(self.node, "Pre build step failure!")
       return False
     if not (self.dependencies == None):
       if not (self.dependencies.build(self, variant)):
+        self.context.log(self.node, "Dependency list build failure!")
         return False
     if not (self.targets == None):
       if not (self.targets.build(self, variant)):
+        self.context.log(self.node, "Target list build failure!")
         return False
     return True
     
@@ -2127,9 +2210,11 @@ class Project(Element):
     os.makedirs(path)
     if not (self.dependencies == None):
       if not (self.dependencies.distribute(self, distribution, variant)):
+        self.context.log(self.node, "Dependency list distribution failure!")
         return False
     if not (self.targets == None):
       if not (self.targets.distribute(self, distribution, variant)):
+        self.context.log(self.node, "Target list distribution failure!")
         return False
     for root, folders, files in os.walk(path):
       for name in files:
@@ -2137,6 +2222,7 @@ class Project(Element):
         status = os.stat(target)
         os.chmod(target, status.st_mode|stat.S_IEXEC)
     if not (self.buildPost(variant)):
+      self.context.log(self.node, "Post build step failure!")
       return False
     return True
     
@@ -2332,6 +2418,8 @@ class Context(Element):
     nodeTags.append("set")
     nodeTags.append("pre")
     nodeTags.append("post")
+    nodeTags.append("packages")
+    nodeTags.append("package")
     for conditional in self.conditionals:
       if not (conditional in nodeTags):
         nodeTags.append(conditional)
@@ -2394,6 +2482,7 @@ class Context(Element):
     nodeParents["target"].append("targets")
     nodeParents["label"].append("dependency")
     nodeParents["label"].append("target")
+    nodeParents["label"].append("package")
     nodeParents["definitions"].append("target")
     nodeParents["definition"].append("definitions")
     nodeParents["key"].append("definition")
@@ -2414,6 +2503,7 @@ class Context(Element):
     nodeParents["generator"].append("cmake")
     nodeParents["generator"].append("target")
     nodeParents["source"].append("cmake")
+    nodeParents["exports"].append("package")
     nodeParents["exports"].append("dependency")
     nodeParents["exports"].append("target")
     nodeParents["export"].append("exports")
@@ -2443,6 +2533,8 @@ class Context(Element):
     nodeParents["post"].append("build")
     nodeParents["pre"].append("target")
     nodeParents["post"].append("target")
+    nodeParents["packages"].append("target")
+    nodeParents["package"].append("packages")
     
     nodeAttributes["json"].append(["key", False])
     nodeAttributes["data"].append(["id", False])
@@ -2802,6 +2894,10 @@ def handle(context, node, tier, parents):
       element = BuildInstruction()
     elif (tag == "arguments"):
       element = ArgumentList()
+    elif (tag == "packages"):
+      element = PackageList()
+    elif (tag == "package"):
+      element = Package()
     elif (tag == "cmake"):
       element = CmakeBuildInstruction()
     elif (tag == "shells"):
@@ -3060,6 +3156,17 @@ def handle(context, node, tier, parents):
         output = ensure(node.text)+flatten(output).strip()
         element = Argument()
         element.string = String(output.strip())
+      elif (tag == "package"):
+        if ("label" in elements):
+          for label in elements["label"]:
+            element.label = label
+            break
+          elements["label"] = None
+        if ("exports" in elements):
+          for exports in elements["exports"]:
+            element.exports = exports
+            break
+          elements["exports"] = None
       elif (tag == "work"):
         output = ensure(node.text)+flatten(output).strip()
         element = Work()
@@ -3069,6 +3176,11 @@ def handle(context, node, tier, parents):
           for argument in elements["argument"]:
             element.addArgument(argument)
           elements["argument"] = None
+      elif (tag == "packages"):
+        if ("package" in elements):
+          for package in elements["package"]:
+            element.addPackage(package)
+          elements["package"] = None
       elif (tag == "build"):
         if ("cmake" in elements):
           for cmake in elements["cmake"]:
@@ -3363,6 +3475,11 @@ def handle(context, node, tier, parents):
             element.arguments = arguments
             break
           elements["arguments"] = None
+        if ("packages" in elements):
+          for packages in elements["packages"]:
+            element.packages = packages
+            break
+          elements["packages"] = None
         if ("definitions" in elements):
           for definitions in elements["definitions"]:
             element.definitions = definitions
