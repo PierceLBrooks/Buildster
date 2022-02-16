@@ -791,6 +791,37 @@ class PackageList(List):
       return False
     return super(PackageList, self).add(package)
     
+class Module(Element):
+  def __init__(self, label = None, exports = None):
+    super(Module, self).__init__()
+    self.label = Label(String(""))
+    if (type(label) == Label):
+      self.label = label
+    self.exports = None
+    if (type(exports) == ExportList):
+      self.exports = exports
+      
+  def build(self, owner, variant):
+    return True
+    
+  def getContent(self):
+    return self.label.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.label)+", "+self.toString(self.exports)+">"
+    
+class ModuleList(List):
+  def __init__(self):
+    super(ModuleList, self).__init__()
+    
+  def build(self, owner, variant):
+    return True
+        
+  def addModule(self, module):
+    if not (isinstance(module, Module)):
+      return False
+    return super(ModuleList, self).add(module)
+    
 class Definition(Object):
   def __init__(self, key = None, value = None):
     super(Definition, self).__init__()
@@ -1659,7 +1690,7 @@ class WGetDependency(RemoteDependency):
     
     
 class Target(Build):
-  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None):
+  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None, modules = None):
     super(Target, self).__init__()
     self.label = None
     self.subpath = None
@@ -1694,6 +1725,9 @@ class Target(Build):
     self.packages = None
     if (type(packages) == PackageList):
       self.packages = packages
+    self.modules = None
+    if (type(modules) == ModuleList):
+      self.modules = modules
       
   def install(self, owner, path, installation, variant):
     result = cmake_install(path, variant, installation)
@@ -1730,6 +1764,8 @@ class Target(Build):
     project = []
     packages = []
     definitions = []
+    modules = []
+    arguments = []
     for i in range(len(owner.getDependencies().getContent())):
       dependency = owner.getDependencies().getContent()[i]
       if not (dependency == self):
@@ -1773,8 +1809,12 @@ class Target(Build):
       os.makedirs(path)
     if not (self.packages == None):
       packages = packages+self.packages.content
+    if not (self.modules == None):
+      modules = modules+self.modules.content
     if not (self.definitions == None):
       definitions = definitions+self.definitions.getContent()
+    if not (self.arguments == None):
+      arguments = arguments+self.arguments.getContent()
     project = unique(project+self.getFiles(owner))
     includes = unique(includes+self.getIncludes(owner))
     files = self.getFiles(owner, "CMakeLists\\.txt")
@@ -1783,12 +1823,34 @@ class Target(Build):
       temp = self.subpath.getContent()
     if not ((os.path.join(self.getPath(owner, variant, None), "CMakeLists.txt").replace("\\", "/") in files) or (os.path.join(self.getPath(owner, variant, None), temp, "CMakeLists.txt").replace("\\", "/") in files)):
       descriptor = open(os.path.join(path, "CMakeLists.txt"), "w")
+      base = path
       write(descriptor, "cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)")
       write(descriptor, "set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} -std=c++14\")")
       write(descriptor, "set(CMAKE_EXE_LINKER_FLAGS \"${CMAKE_EXE_LINKER_FLAGS} -std=c++14\")")
       write(descriptor, "set(CMAKE_SHARED_LINKER_FLAGS \"${CMAKE_SHARED_LINKER_FLAGS} -std=c++14\")")
+      if not (context == None):
+        if not (context.project == None):
+          if not (context.project.cmake_modules == None):
+            if not (context.project.directory == None):
+              cmake_modules = os.path.join(wd(), context.project.directory.getContent(), context.project.cmake_modules.getContent()).replace("\\", "/")
+              if (os.path.isdir(cmake_modules)):
+                cmake_modules = relativize(base, cmake_modules).replace("\\", "/")
+                write(descriptor, "set(CMAKE_MODULE_PATH \"${CMAKE_CURRENT_LIST_DIR}/"+cmake_modules+"\")")
       write(descriptor, "project(\""+self.label.getContent()+"Project\")")
-      base = path
+      write(descriptor, "set(HEADERS )")
+      write(descriptor, "set(FILES )")
+      for i in range(len(arguments)):
+        argument = arguments[i]
+        if (len(argument) > 2):
+          if (argument[:2] == "-D"):
+            argument = argument[2:].split("=")
+            if (len(argument) > 1):
+              key = argument[0]
+              value = ""
+              argument = argument[1:]
+              for j in range(len(argument)):
+                value += argument[j]
+              write(descriptor, "set("+key+" "+value+")")
       for i in range(len(packages)):
         package = packages[i]
         if (package == None):
@@ -1809,18 +1871,71 @@ class Target(Build):
               write(descriptor, "link_libraries(${"+export.key.getContent()+"})")
             else:
               pass
+      for i in range(len(modules)):
+        module = modules[i]
+        if (module == None):
+          continue
+        if not (module.exports == None):
+          for j in range(len(module.exports.content)):
+            export = module.exports.content[j]
+            if (export == None):
+              continue
+            if (export.key == None):
+              continue
+            if (len(export.key.getContent()) == 0):
+              continue
+            write(descriptor, "set("+export.key.getContent()+" )")
+        if (os.path.isfile(module.getContent())):
+          write(descriptor, "include(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, module.getContent()).replace("\\", "/")+"\")")
+        else:
+          write(descriptor, "include("+module.getContent()+")")
+        if not (module.exports == None):
+          for j in range(len(module.exports.content)):
+            export = module.exports.content[j]
+            if (export == None):
+              continue
+            if (export.export == None):
+              continue
+            if (export.key == None):
+              continue
+            if (export.export.getContent() == "headers"):
+              if not (export.value == None):
+                if not (len(export.value.getContent()) == 0):
+                  if (os.path.isdir(export.value.getContent())):
+                    write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, export.value.getContent()).replace("\\", "/")+"\")")
+                  else:
+                    write(descriptor, "include_directories("+export.value.getContent()+")")
+                else:
+                  write(descriptor, "include_directories(${"+export.key.getContent()+"})")
+              else:
+                write(descriptor, "include_directories(${"+export.key.getContent()+"})")
+            elif (export.export.getContent() == "libraries"):
+              if not (export.value == None):
+                if not (len(export.value.getContent()) == 0):
+                  if (os.path.isdir(export.value.getContent())):
+                    write(descriptor, "link_libraries(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, export.value.getContent()).replace("\\", "/")+"\")")
+                  else:
+                    write(descriptor, "link_libraries("+export.value.getContent()+")")
+                else:
+                  write(descriptor, "link_libraries(${"+export.key.getContent()+"})")
+              else:
+                write(descriptor, "link_libraries(${"+export.key.getContent()+"})")
+            elif (export.export.getContent() == "files"):
+              write(descriptor, "list(APPEND FILES ${"+export.key.getContent()+"})")
+            else:
+              pass
       for i in range(len(definitions)):
         definition = definitions[i]
         write(descriptor, "add_definitions(-D"+definition+")")
       for i in range(len(includes)):
         include = includes[i]
-        write(descriptor, "include_directories(\""+relativize(base, include.replace("\\", "/"))+"\")")
+        write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, include.replace("\\", "/"))+"\")")
       for export in exports:
         if (exports[export][1] == "headers"):
           headers = exports[export][0].replace("\\", "/")
           if not (os.path.isdir(headers)):
             os.makedirs(headers)
-          write(descriptor, "include_directories(\""+relativize(base, headers.replace("\\", "/"))+"\")")
+          write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, headers.replace("\\", "/"))+"\")")
         elif (exports[export][1] == "libraries"):
           libraries = exports[export][0].replace("\\", "/")
           if not (os.path.isdir(libraries)):
@@ -1830,7 +1945,7 @@ class Target(Build):
               for i in range(len(owner.getContext().libraries)):
                 if (name.endswith("."+owner.getContext().libraries[i])):
                   links.append(str(root).replace("\\", "/"))
-                  write(descriptor, "link_directories(\""+relativize(base, links[len(links)-1])+"\")")
+                  write(descriptor, "link_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, links[len(links)-1])+"\")")
                   name = None
                   break
               if (name == None):
@@ -1840,7 +1955,7 @@ class Target(Build):
       for i in range(len(linkages)):
         linkage = linkages[i]
         links.append(linkage.replace("\\", "/"))
-        write(descriptor, "link_directories(\""+relativize(base, links[len(links)-1])+"\")")
+        write(descriptor, "link_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, links[len(links)-1])+"\")")
       if not (self.links == None):
         for i in range(len(self.links.content)):
           link = self.links.content[i].getContent().strip()
@@ -1857,17 +1972,15 @@ class Target(Build):
             write(descriptor, "link_libraries("+link+")")
       if (len(project) > 0):
         target = str(type(self))
-        write(descriptor, "set(HEADERS )")
-        write(descriptor, "set(FILES )")
         for i in range(len(project)):
           for j in range(len(owner.getContext().extensions)):
             extension = "."+owner.getContext().extensions[j]
             if (project[i].endswith(extension)):
-              write(descriptor, "list(APPEND FILES \""+relativize(base, project[i].replace("\\", "/"))+"\")")
+              write(descriptor, "list(APPEND FILES \"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, project[i].replace("\\", "/"))+"\")")
               if ("Library" in target):
                 for k in range(len(owner.getContext().headers)):
                   if (extension == "."+owner.getContext().headers[k]):
-                    write(descriptor, "list(APPEND HEADERS \""+relativize(base, project[i].replace("\\", "/"))+"\")")
+                    write(descriptor, "list(APPEND HEADERS \"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, project[i].replace("\\", "/"))+"\")")
               break
         if ("Executable" in target):
           write(descriptor, "add_executable("+self.label.getContent()+" ${FILES})")
@@ -1893,9 +2006,6 @@ class Target(Build):
     if (generator == None):
       context.log(self.node, "Generator failure!")
       return False
-    arguments = []
-    if not (self.arguments == None):
-      arguments = self.arguments.getContent()
     exports = owner.getExports(self.importsContent, variant, [self])
     if (variant in self.importsContent):
       for i in range(len(exports)):
@@ -1920,13 +2030,13 @@ class Target(Build):
 
   def buildVariant(self, owner, generator, arguments, path, installation, variant):
     if (self.subpath == None):
-      result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build", variant.lower()).replace("\\", "/"), installation, variant)
+      result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build").replace("\\", "/"), installation, variant)
     else:
-      result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, self.subpath.getContent()), os.path.join(path, "build", variant.lower()).replace("\\", "/"), installation, variant)
+      result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, self.subpath.getContent()), os.path.join(path, "build").replace("\\", "/"), installation, variant)
     owner.getContext().log(self.node, result)
-    result = cmake_build(os.path.join(path, "build", variant.lower()).replace("\\", "/"), variant)
+    result = cmake_build(os.path.join(path, "build").replace("\\", "/"), variant)
     owner.getContext().log(self.node, result)
-    success = self.install(owner, os.path.join(path, "build", variant.lower()).replace("\\", "/"), os.path.join(installation, variant.lower()).replace("\\", "/"), variant)
+    success = self.install(owner, os.path.join(path, "build").replace("\\", "/"), os.path.join(installation, variant.lower()).replace("\\", "/"), variant)
     return success
     
   def distribute(self, owner, distribution, variant):
@@ -2117,7 +2227,7 @@ class ExecutableTarget(Target):
     return True
     
   def __str__(self):
-    return "<"+self.toString(self.label)+", "+self.toString(self.definitions)+", "+self.toString(self.links)+", "+self.toString(self.imports)+", "+self.toString(self.arguments)+", "+self.toString(self.packages)+">"
+    return "<"+self.toString(self.label)+", "+self.toString(self.definitions)+", "+self.toString(self.links)+", "+self.toString(self.imports)+", "+self.toString(self.arguments)+", "+self.toString(self.packages)+", "+self.toString(self.modules)+">"
     
 class LibraryTarget(Target):
   def __init__(self, label = None, definitions = None, links = None, imports = None, exports = None):
@@ -2148,16 +2258,17 @@ class LibraryTarget(Target):
     return True
     
   def __str__(self):
-    return "<"+self.toString(self.label)+", "+self.toString(self.definitions)+", "+self.toString(self.links)+", "+self.toString(self.imports)+", "+self.toString(self.exports)+">"
+    return "<"+self.toString(self.label)+", "+self.toString(self.definitions)+", "+self.toString(self.links)+", "+self.toString(self.imports)+", "+self.toString(self.exports)+", "+self.toString(self.arguments)+", "+self.toString(self.packages)+", "+self.toString(self.modules)+">"
     
 class Project(Element):
-  def __init__(self, dependencies = None, targets = None, directory = None, context = None):
+  def __init__(self, dependencies = None, targets = None, directory = None, cmake_modules = None, context = None):
     super(Project, self).__init__()
     self.pre = None
     self.post = None
     self.dependencies = None
     self.targets = None
     self.directory = None
+    self.cmake_modules = None
     self.context = None
     self.owner = None
     if (type(dependencies) == DependencyList):
@@ -2166,6 +2277,8 @@ class Project(Element):
       self.targets = targets
     if (type(directory) == Path):
       self.directory = directory
+    if (type(cmake_modules) == Path):
+      self.cmake_modules = cmake_modules
     if (str(type(context)) == "Context"):
       self.context = context
       
@@ -2420,6 +2533,8 @@ class Context(Element):
     nodeTags.append("post")
     nodeTags.append("packages")
     nodeTags.append("package")
+    nodeTags.append("modules")
+    nodeTags.append("module")
     for conditional in self.conditionals:
       if not (conditional in nodeTags):
         nodeTags.append(conditional)
@@ -2483,6 +2598,7 @@ class Context(Element):
     nodeParents["label"].append("dependency")
     nodeParents["label"].append("target")
     nodeParents["label"].append("package")
+    nodeParents["label"].append("module")
     nodeParents["definitions"].append("target")
     nodeParents["definition"].append("definitions")
     nodeParents["key"].append("definition")
@@ -2503,6 +2619,7 @@ class Context(Element):
     nodeParents["generator"].append("cmake")
     nodeParents["generator"].append("target")
     nodeParents["source"].append("cmake")
+    nodeParents["exports"].append("module")
     nodeParents["exports"].append("package")
     nodeParents["exports"].append("dependency")
     nodeParents["exports"].append("target")
@@ -2535,6 +2652,8 @@ class Context(Element):
     nodeParents["post"].append("target")
     nodeParents["packages"].append("target")
     nodeParents["package"].append("packages")
+    nodeParents["modules"].append("target")
+    nodeParents["module"].append("modules")
     
     nodeAttributes["json"].append(["key", False])
     nodeAttributes["data"].append(["id", False])
@@ -2544,7 +2663,9 @@ class Context(Element):
     nodeAttributes["switch"].append(["id", False])
     nodeAttributes["case"].append(["check", False])
     nodeAttributes["buildster"].append(["directory", False])
+    nodeAttributes["buildster"].append(["distribution", False])
     nodeAttributes["project"].append(["directory", False])
+    nodeAttributes["project"].append(["cmake_modules", True])
     nodeAttributes["export"].append(["except", True])
     nodeAttributes["export"].append(["type", False])
     nodeAttributes["target"].append(["type", False])
@@ -2569,6 +2690,7 @@ class Context(Element):
     self.debug = debug
     self.tier = 0
     self.root = None
+    self.project = None
     self.context = self
     self.nodes = {}
     self.logs = []
@@ -2590,10 +2712,14 @@ class Context(Element):
     self.tier = None
     self.log(self.node, "CONTEXT_BUILD_BEGIN\n")
     for i in range(len(self.projects)):
+      if (self.projects[i] == None):
+        continue
+      self.project = self.projects[i]
       if not (self.projects[i].build(self, variant)):
         self.tier = None
         self.log(self.node, "CONTEXT_BUILD_END\n")
         return False
+      self.project = None
     self.tier = None
     self.log(self.node, "CONTEXT_BUILD_END\n")
     return True
@@ -2602,10 +2728,14 @@ class Context(Element):
     self.tier = None
     self.log(self.node, "CONTEXT_DISTRIBUTE_BEGIN\n")
     for i in range(len(self.projects)):
+      if (self.projects[i] == None):
+        continue
+      self.project = self.projects[i]
       if not (self.projects[i].distribute(self, os.path.join(wd(), self.root.directory.getContent(), distribution).replace("\\", "/"), variant)):
         self.tier = None
         self.log(self.node, "CONTEXT_DISTRIBUTE_END\n")
         return False
+      self.project = None
     self.tier = None
     self.log(self.node, "CONTEXT_DISTRIBUTE_END\n")
     return True
@@ -2857,13 +2987,18 @@ def handle(context, node, tier, parents):
     elif (tag == "buildster"):
       element = Buildster()
       element.context = context
-      element.directory = Path(String(node.attrib["directory"]))
-      element.distribution = Path(String(node.attrib["distribution"]))
+      if ("directory" in node.attrib):
+        element.directory = Path(String(node.attrib["directory"].strip()))
+      if ("distribution" in node.attrib):
+        element.distribution = Path(String(node.attrib["distribution"].strip()))
       context.root = element
     elif (tag == "project"):
       element = Project()
       element.context = context
-      element.directory = Path(String(node.attrib["directory"]))
+      if ("directory" in node.attrib):
+        element.directory = Path(String(node.attrib["directory"].strip()))
+      if ("cmake_modules" in node.attrib):
+        element.cmake_modules = Path(String(node.attrib["cmake_modules"].strip()))
       if not (element in context.projects):
         context.projects.append(element)
     elif (tag == "dependencies"):
@@ -2898,6 +3033,10 @@ def handle(context, node, tier, parents):
       element = PackageList()
     elif (tag == "package"):
       element = Package()
+    elif (tag == "modules"):
+      element = ModuleList()
+    elif (tag == "module"):
+      element = Module()
     elif (tag == "cmake"):
       element = CmakeBuildInstruction()
     elif (tag == "shells"):
@@ -3156,6 +3295,17 @@ def handle(context, node, tier, parents):
         output = ensure(node.text)+flatten(output).strip()
         element = Argument()
         element.string = String(output.strip())
+      elif (tag == "module"):
+        if ("label" in elements):
+          for label in elements["label"]:
+            element.label = label
+            break
+          elements["label"] = None
+        if ("exports" in elements):
+          for exports in elements["exports"]:
+            element.exports = exports
+            break
+          elements["exports"] = None
       elif (tag == "package"):
         if ("label" in elements):
           for label in elements["label"]:
@@ -3176,6 +3326,11 @@ def handle(context, node, tier, parents):
           for argument in elements["argument"]:
             element.addArgument(argument)
           elements["argument"] = None
+      elif (tag == "modules"):
+        if ("module" in elements):
+          for module in elements["module"]:
+            element.addModule(module)
+          elements["module"] = None
       elif (tag == "packages"):
         if ("package" in elements):
           for package in elements["package"]:
@@ -3480,6 +3635,11 @@ def handle(context, node, tier, parents):
             element.packages = packages
             break
           elements["packages"] = None
+        if ("modules" in elements):
+          for modules in elements["modules"]:
+            element.modules = modules
+            break
+          elements["modules"] = None
         if ("definitions" in elements):
           for definitions in elements["definitions"]:
             element.definitions = definitions
