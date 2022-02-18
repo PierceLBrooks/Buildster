@@ -1829,10 +1829,7 @@ class Target(Build):
     if not ((os.path.join(self.getPath(owner, variant, None), "CMakeLists.txt").replace("\\", "/") in files) or (os.path.join(self.getPath(owner, variant, None), temp, "CMakeLists.txt").replace("\\", "/") in files)):
       descriptor = open(os.path.join(path, "CMakeLists.txt"), "w")
       base = path
-      write(descriptor, "cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)")
-      write(descriptor, "set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} -std=c++14\")")
-      write(descriptor, "set(CMAKE_EXE_LINKER_FLAGS \"${CMAKE_EXE_LINKER_FLAGS} -std=c++14\")")
-      write(descriptor, "set(CMAKE_SHARED_LINKER_FLAGS \"${CMAKE_SHARED_LINKER_FLAGS} -std=c++14\")")
+      write(descriptor, "cmake_minimum_required(VERSION 3.12.0 FATAL_ERROR)")
       if not (context == None):
         if not (context.project == None):
           if not (context.project.cmake_modules == None):
@@ -1991,9 +1988,11 @@ class Target(Build):
           write(descriptor, "add_executable("+self.label.getContent()+" ${FILES})")
           if (platform.system() == "Darwin"):
             write(descriptor, "add_custom_command(TARGET "+self.label.getContent()+" POST_BUILD COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath \"@executable_path/\" $<TARGET_FILE:"+self.label.getContent()+"> || :)")
+          write(descriptor, "target_compile_features("+self.label.getContent()+" PRIVATE cxx_std_"+context.root.cpp.getContent()+")")
         elif ("Library" in target):
           write(descriptor, "add_library("+self.label.getContent()+" ${FILES})")
           write(descriptor, "set_target_properties("+self.label.getContent()+" PROPERTIES PUBLIC_HEADER \"${HEADERS}\")")
+          write(descriptor, "target_compile_features("+self.label.getContent()+" PRIVATE cxx_std_"+context.root.cpp.getContent()+")")
         else:
           pass
         write(descriptor, "install(TARGETS "+self.label.getContent()+")")
@@ -2379,15 +2378,18 @@ class Project(Element):
     return "<"+self.toString(self.dependencies)+", "+self.toString(self.targets)+", "+self.toString(self.directory)+">"
 
 class Buildster(Element):
-  def __init__(self, directory = None, distribution = None, context = None):
+  def __init__(self, directory = None, distribution = None, cpp = None, context = None):
     super(Buildster, self).__init__()
     self.directory = None
     self.distribution = None
+    self.cpp = String("14")
     self.context = None
     if (str(type(directory)) == "Path"):
       self.directory = directory
     if (str(type(distribution)) == "Path"):
       self.distribution = distribution
+    if (str(type(cpp) == "String")):
+      self.cpp = cpp
     if (str(type(context)) == "Context"):
       self.context = context
       
@@ -3001,6 +3003,8 @@ def handle(context, node, tier, parents):
         element.directory = Path(String(node.attrib["directory"].strip()))
       if ("distribution" in node.attrib):
         element.distribution = Path(String(node.attrib["distribution"].strip()))
+      if ("cpp" in node.attrib):
+        element.cpp = String(node.attrib["cpp"].strip())
       context.root = element
     elif (tag == "project"):
       element = Project()
