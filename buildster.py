@@ -3005,6 +3005,8 @@ def handle(context, node, tier, parents):
         element.distribution = Path(String(node.attrib["distribution"].strip()))
       if ("cpp" in node.attrib):
         element.cpp = String(node.attrib["cpp"].strip())
+      else:
+        element.cpp = String("14")
       context.root = element
     elif (tag == "project"):
       element = Project()
