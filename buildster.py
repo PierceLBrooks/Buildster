@@ -1391,9 +1391,14 @@ class DependencyList(List):
   def build(self, owner, variant):
     self.owner = owner
     self.directory = self.owner.directory
+    context = self.getContext()
     length = len(self.content)
     for i in range(length):
       if (isinstance(self.content[i], Dependency)):
+        if ("BUILDSTER_BUILD" in context.data):
+          if not (self.content[i].label == None):
+            if not (self.content[i].label.getContent() == context.data["BUILDSTER_BUILD"]):
+              continue
         if not (self.content[i].build(self, variant)):
           self.getContext().log(self.node, "Dependency build failure @ "+str(i)+"!")
           return False
@@ -2144,9 +2149,14 @@ class TargetList(List):
   def build(self, owner, variant):
     self.owner = owner
     self.directory = self.owner.directory
+    context = self.getContext()
     length = len(self.content)
     for i in range(length):
       if (isinstance(self.content[i], Target)):
+        if ("BUILDSTER_BUILD" in context.data):
+          if not (self.content[i].label == None):
+            if not (self.content[i].label.getContent() == context.data["BUILDSTER_BUILD"]):
+              continue
         if not (self.content[i].build(self, variant)):
           self.getContext().log(self.node, "Target build failure @ "+str(i)+"!")
           return False
