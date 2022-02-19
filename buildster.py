@@ -70,18 +70,19 @@ def split(path):
 def relativize(base, leaf):
   return os.path.relpath(leaf, base).replace("\\", "/")
   
-def find(base, leaf):
+def find(base, leaf, prefixes = [""]):
   if not (os.path.isdir(base)):
     return None
   for root, folders, files in os.walk(base):
     for name in files:
-      if (len(name) > len(leaf)):
-        if (name.startswith(leaf)):
-          if (name[len(leaf)] == '.'):
+      for prefix in prefixes:
+        if (len(name) > len(prefix)+len(leaf)):
+          if (name.startswith(prefix+leaf)):
+            if (name[len(prefix)+len(leaf)] == '.'):
+              return os.path.join(root, name)
+        else:
+          if (name == prefix+leaf):
             return os.path.join(root, name)
-      else:
-        if (len(name) == len(leaf)):
-          return os.path.join(root, name)
   return None
 
 def copy(source, destination):
@@ -2044,7 +2045,11 @@ class Target(Build):
     return success
     
   def distribute(self, owner, distribution, variant):
-    installation = find(os.path.join(self.getPath(owner, variant, "install"), variant.lower()).replace("\\", "/"), self.label.getContent())
+    target = str(type(self))
+    prefixes = [""]
+    if ("Library" in target):
+      prefixes = prefixes+["lib"]
+    installation = find(os.path.join(self.getPath(owner, variant, "install")).replace("\\", "/"), self.label.getContent(), prefixes)
     if (installation == None):
       return False
     source = installation.replace("\\", "/")
@@ -2053,7 +2058,6 @@ class Target(Build):
       return False
     if not (platform.system() == "Linux"):
       return True
-    target = str(type(self))
     success = True
     if ("Executable" in target):
       if (os.path.exists(destination)):
