@@ -1311,6 +1311,7 @@ class Dependency(Build):
     return True
     
   def distribute(self, owner, distribution, variant):
+    context = owner.getContext()
     exports = self.getExports(variant, self)
     if not (type(exports) == dict):
       return False
@@ -1320,6 +1321,8 @@ class Dependency(Build):
         if (os.path.isdir(export[1])):
           for root, folders, files in os.walk(export[1]):
             for name in files:
+              if (context.exclude(name)):
+                continue
               if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
                 if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
                   return False
@@ -1330,6 +1333,8 @@ class Dependency(Build):
           if (os.path.isdir(os.path.dirname(export[1]))):
             for root, folders, files in os.walk(os.path.dirname(export[1])):
               for name in files:
+                if (context.exclude(name)):
+                  continue
                 if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
                   if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
                     return False
@@ -1338,12 +1343,16 @@ class Dependency(Build):
           if (os.path.isdir(os.path.join(export[1], "bin"))):
             for root, folders, files in os.walk(os.path.join(export[1], "bin")):
               for name in files:
+                if (context.exclude(name)):
+                  continue
                 if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
                   if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
                     return False
           if (os.path.isdir(os.path.join(export[1], "lib"))):
             for root, folders, files in os.walk(os.path.join(export[1], "lib")):
               for name in files:
+                if (context.exclude(name)):
+                  continue
                 if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
                   if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
                     return False
@@ -2421,7 +2430,23 @@ class Context(Element):
     
 
     self.variant = variant
-
+    
+    
+    self.exclusions = []
+    
+    self.exclusions.append("o")
+    self.exclusions.append("obj")
+    self.exclusions.append("lo")
+    self.exclusions.append("la")
+    self.exclusions.append("d")
+    self.exclusions.append("in")
+    self.exclusions.append("ac")
+    self.exclusions.append("cmake")
+    self.exclusions.append("txt")
+    self.exclusions.append("log")
+    self.exclusions.append("bin")
+    self.exclusions.append("make")
+    self.exclusions.append("internal")
 
     self.extensions = []
     
@@ -2796,6 +2821,12 @@ class Context(Element):
             self.record(node, "Node Attribute Error...")
             return False
     return True
+    
+  def exclude(self, leaf):
+    for exclusion in self.exclusions:
+      if (leaf.endswith("."+exclusion)):
+        return True
+    return False
   
   def find(self, id):
     if not (id in self.data):
