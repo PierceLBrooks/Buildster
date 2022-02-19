@@ -3813,6 +3813,9 @@ def run(target, data):
         left = elements[0].strip()
         right = elements[1].strip()
         dictionary[left] = right
+    if ("BUILDSTER_VARIANT" in dictionary):
+      if not (variant == dictionary["BUILDSTER_VARIANT"]):
+        continue
     tree = xml_tree.parse(target)
     base = tree.getroot()
     if not (base.tag == "buildster"):
