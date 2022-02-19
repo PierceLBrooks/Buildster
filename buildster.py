@@ -3315,6 +3315,20 @@ def handle(context, node, tier, parents):
         if ("label" in elements):
           for label in elements["label"]:
             element.label = label
+            if (label.getContent() in context.labels):
+              for i in range(len(context.labels)):
+                if (context.labels[i] == label.getContent()):
+                  if (i == 0):
+                    if (len(context.labels) > 1):
+                      context.labels = context.labels[1:]
+                    else:
+                      context.labels = []
+                    break
+                  if (i == len(context.labels)-1):
+                    context.labels = context.labels[:(len(context.labels)-1)]
+                    break
+                  context.labels = context.labels[:i]+context.labels[(i+1):]
+                  break
             break
           elements["label"] = None
         if ("exports" in elements):
@@ -3326,6 +3340,20 @@ def handle(context, node, tier, parents):
         if ("label" in elements):
           for label in elements["label"]:
             element.label = label
+            if (label.getContent() in context.labels):
+              for i in range(len(context.labels)):
+                if (context.labels[i] == label.getContent()):
+                  if (i == 0):
+                    if (len(context.labels) > 1):
+                      context.labels = context.labels[1:]
+                    else:
+                      context.labels = []
+                    break
+                  if (i == len(context.labels)-1):
+                    context.labels = context.labels[:(len(context.labels)-1)]
+                    break
+                  context.labels = context.labels[:i]+context.labels[(i+1):]
+                  break
             break
           elements["label"] = None
         if ("exports" in elements):
