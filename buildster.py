@@ -218,7 +218,10 @@ def cmake_configure(generator, arguments, source, path, installation, variant, e
   command.append(generator)
   for i in range(length):
     command.append(arguments[i])
-  command.append("-DCMAKE_INSTALL_PREFIX="+os.path.join(installation, variant.lower()).replace("\\", "/"))
+  if (variant == None):
+    command.append("-DCMAKE_INSTALL_PREFIX="+installation.replace("\\", "/"))
+  else:
+    command.append("-DCMAKE_INSTALL_PREFIX="+os.path.join(installation, variant.lower()).replace("\\", "/"))
   command.append(source)
   if not (os.path.isdir(path)):
     os.makedirs(path)
@@ -1696,7 +1699,7 @@ class WGetDependency(RemoteDependency):
     
     
 class Target(Build):
-  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None, modules = None):
+  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None, modules = None, linkage = None):
     super(Target, self).__init__()
     self.label = None
     self.subpath = None
@@ -1734,6 +1737,9 @@ class Target(Build):
     self.modules = None
     if (type(modules) == ModuleList):
       self.modules = modules
+    self.linkage = None
+    if (type(linkage) == String):
+      self.linkage = linkage
       
   def install(self, owner, path, installation, variant):
     result = cmake_install(path, variant, installation)
@@ -1991,7 +1997,10 @@ class Target(Build):
             write(descriptor, "add_custom_command(TARGET "+self.label.getContent()+" POST_BUILD COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath \"@executable_path/\" $<TARGET_FILE:"+self.label.getContent()+"> || :)")
           write(descriptor, "target_compile_features("+self.label.getContent()+" PRIVATE cxx_std_"+context.root.cpp.getContent()+")")
         elif ("Library" in target):
-          write(descriptor, "add_library("+self.label.getContent()+" ${FILES})")
+          if (self.linkage == None):
+            write(descriptor, "add_library("+self.label.getContent()+" ${FILES})")
+          else:
+            write(descriptor, "add_library("+self.label.getContent()+" "+self.linkage.getContent().upper()+" "+"${FILES})")
           write(descriptor, "set_target_properties("+self.label.getContent()+" PROPERTIES PUBLIC_HEADER \"${HEADERS}\")")
           write(descriptor, "target_compile_features("+self.label.getContent()+" PRIVATE cxx_std_"+context.root.cpp.getContent()+")")
         else:
@@ -2035,13 +2044,13 @@ class Target(Build):
 
   def buildVariant(self, owner, generator, arguments, path, installation, variant):
     if (self.subpath == None):
-      result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build").replace("\\", "/"), installation, variant)
+      result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build").replace("\\", "/"), installation, None)
     else:
-      result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, self.subpath.getContent()), os.path.join(path, "build").replace("\\", "/"), installation, variant)
+      result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, self.subpath.getContent()), os.path.join(path, "build").replace("\\", "/"), installation, None)
     owner.getContext().log(self.node, result)
     result = cmake_build(os.path.join(path, "build").replace("\\", "/"), variant)
     owner.getContext().log(self.node, result)
-    success = self.install(owner, os.path.join(path, "build").replace("\\", "/"), os.path.join(installation, variant.lower()).replace("\\", "/"), variant)
+    success = self.install(owner, os.path.join(path, "build").replace("\\", "/"), installation.replace("\\", "/"), variant)
     return success
     
   def distribute(self, owner, distribution, variant):
@@ -2685,6 +2694,7 @@ class Context(Element):
     nodeAttributes["export"].append(["except", True])
     nodeAttributes["export"].append(["type", False])
     nodeAttributes["target"].append(["type", False])
+    nodeAttributes["target"].append(["linkage", True])
     nodeAttributes["search"].append(["type", False])
     
     
@@ -3041,6 +3051,8 @@ def handle(context, node, tier, parents):
         element = LibraryTarget()
       else:
         pass
+      if ("linkage" in node.attrib):
+        element.linkage = String(node.attrib["linkage"].strip())
     elif (tag == "pre"):
       element = PreBuildInstruction()
     elif (tag == "post"):
