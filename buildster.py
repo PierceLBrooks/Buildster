@@ -2572,6 +2572,8 @@ class Context(Element):
     self.conditionals.append("if")
     self.conditionals.append("if_check")
     self.conditionals.append("switch")
+    self.conditionals.append("else")
+    self.conditionals.append("case")
     
     self.nonconditionals = []
     
@@ -2976,7 +2978,7 @@ def handle(context, node, tier, parents):
   #context.log(node, "NODE_BEGIN\n")
   if (context.check(node, parent)):
     element = None
-    if (tag in context.conditionals):
+    if ((tag in context.conditionals) and ("id" in node.attrib)):
       id = node.attrib["id"]
       if (tag == "if"):
         if not (context.find(id)):
