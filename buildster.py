@@ -210,12 +210,16 @@ def git_submodule(environment = None):
   result = execute_command(command, environment)
   return result
 
-def cmake_configure(generator, arguments, source, path, installation, variant, environment = None):
+def cmake_configure(generator, architecture, arguments, source, path, installation, variant, environment = None):
   length = len(arguments)
   command = []
   command.append("cmake")
-  command.append("-G")
-  command.append(generator)
+  if not (generator == None):
+    command.append("-G")
+    command.append(generator)
+  if not (architecture == None):
+    command.append("-A")
+    command.append(architecture)
   for i in range(length):
     command.append(arguments[i])
   if (variant == None):
@@ -645,9 +649,9 @@ class Branch(Object):
   def __str__(self):
     return "<"+self.toString(self.string)+">"
 
-class Generator(Object):
+class Architecture(Object):
   def __init__(self, string = None):
-    super(Generator, self).__init__()
+    super(Architecture, self).__init__()
     self.string = None
     if (type(string) == String):
       self.string = string
@@ -657,6 +661,22 @@ class Generator(Object):
     
   def __str__(self):
     return "<"+self.toString(self.string)+">"
+
+class Generator(Object):
+  def __init__(self, string = None, architecture = None):
+    super(Generator, self).__init__()
+    self.string = None
+    if (type(string) == String):
+      self.string = string
+    self.architecture = None
+    if (type(architecture) == Architecture):
+      self.architecture = architecture
+      
+  def getContent(self):
+    return self.string.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.string)+", "+self.toString(self.architecture)+">"
 
 class Path(Object):
   def __init__(self, string = None):
@@ -764,8 +784,36 @@ class ArgumentList(List):
       return False
     return super(ArgumentList, self).add(argument)
     
+class Hint(Element):
+  def __init__(self, string = None):
+    super(Hint, self).__init__()
+    self.string = None
+    if (type(string) == String):
+      self.string = string
+      
+  def build(self, owner, variant):
+    return True
+    
+  def getContent(self):
+    return self.string.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.string)+">"
+    
+class HintList(List):
+  def __init__(self):
+    super(HintList, self).__init__()
+    
+  def build(self, owner, variant):
+    return True
+        
+  def addHint(self, hint):
+    if not (isinstance(hint, Hint)):
+      return False
+    return super(HintList, self).add(hint)
+    
 class Package(Element):
-  def __init__(self, label = None, exports = None):
+  def __init__(self, label = None, exports = None, hints = None):
     super(Package, self).__init__()
     self.label = Label(String(""))
     if (type(label) == Label):
@@ -773,6 +821,9 @@ class Package(Element):
     self.exports = None
     if (type(exports) == ExportList):
       self.exports = exports
+    self.hints = None
+    if (type(hints) == HintList):
+      self.hints = hints
       
   def build(self, owner, variant):
     return True
@@ -781,7 +832,7 @@ class Package(Element):
     return self.label.getContent()
     
   def __str__(self):
-    return "<"+self.toString(self.label)+", "+self.toString(self.exports)+">"
+    return "<"+self.toString(self.label)+", "+self.toString(self.exports)+", "+self.toString(self.hints)+">"
     
 class PackageList(List):
   def __init__(self):
@@ -1090,8 +1141,14 @@ class CmakeBuildInstruction(BuildInstruction):
     return True
 
   def buildVariant(self, owner, arguments, cmake, installation, variant):
+    generator = None
+    architecture = None
+    if not (self.generator == None):
+      generator = self.generator.getContent()
+      if not (self.generator.architecture == None):
+        architecture = self.generator.architecture.getContent()
     path = os.path.join(cmake, variant.lower()).replace("\\", "/")
-    result = cmake_configure(self.generator.getContent(), arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, "..", self.source.getContent()).replace("\\", "/"), path, installation, variant)
+    result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, "..", self.source.getContent()).replace("\\", "/"), path, installation, variant)
     owner.getContext().log(self.node, result)
     result = cmake_build(os.path.join(cmake, variant.lower()).replace("\\", "/"), variant)
     owner.getContext().log(self.node, result)
@@ -1115,7 +1172,7 @@ class ShellsBuildInstruction(BuildInstruction):
   def __init__(self, arguments = None, generator = None, source = None):
     super(ShellsBuildInstruction, self).__init__(arguments)
     self.shells = []
-      
+    
   def build(self, owner, path, subpath, installation, imports, variant):
     length = len(self.shells)
     if not (self.getPre() == None):
@@ -1141,7 +1198,7 @@ class ShellsBuildInstruction(BuildInstruction):
     
 class ShellBuildInstruction(BuildInstruction):
   def __init__(self, commands = None, work = None):
-    super(ShellBuildInstruction, self).__init__(arguments)
+    super(ShellBuildInstruction, self).__init__()
     self.commands = None
     self.work = None
       
@@ -1869,26 +1926,6 @@ class Target(Build):
               for j in range(len(argument)):
                 value += argument[j]
               write(descriptor, "set("+key+" "+value+")")
-      for i in range(len(packages)):
-        package = packages[i]
-        if (package == None):
-          continue
-        write(descriptor, "find_package("+package.getContent()+" REQUIRED)")
-        if not (package.exports == None):
-          for j in range(len(package.exports.content)):
-            export = package.exports.content[j]
-            if (export == None):
-              continue
-            if (export.export == None):
-              continue
-            if (export.key == None):
-              continue
-            if (export.export.getContent() == "headers"):
-              write(descriptor, "include_directories(${"+export.key.getContent()+"})")
-            elif (export.export.getContent() == "libraries"):
-              write(descriptor, "link_libraries(${"+export.key.getContent()+"})")
-            else:
-              pass
       for i in range(len(modules)):
         module = modules[i]
         if (module == None):
@@ -1988,6 +2025,44 @@ class Target(Build):
                         break
           else:
             write(descriptor, "link_libraries("+link+")")
+      if (platform.system() == "Linux"):
+        write(descriptor, "find_package(PkgConfig REQUIRED)")
+      for i in range(len(packages)):
+        package = packages[i]
+        if (package == None):
+          continue
+        hints = None
+        if not (package.hints == None):
+          hints = ""
+          for j in range(len(package.hints.content)):
+            if (j+1 < len(package.hints.content)):
+              hints += " "
+            hint = package.hints.content[j]
+            if (hint == None):
+              continue
+            hint = hint.getContent()
+            hints += hint
+          if (len(hints) == 0):
+            hints = None
+        if (hints == None):
+          write(descriptor, "find_package("+package.getContent()+" REQUIRED)")
+        else:
+          write(descriptor, "pkg_search_module("+package.getContent()+" REQUIRED "+hints+")")
+        if not (package.exports == None):
+          for j in range(len(package.exports.content)):
+            export = package.exports.content[j]
+            if (export == None):
+              continue
+            if (export.export == None):
+              continue
+            if (export.key == None):
+              continue
+            if (export.export.getContent() == "headers"):
+              write(descriptor, "include_directories(${"+export.key.getContent()+"})")
+            elif (export.export.getContent() == "libraries"):
+              write(descriptor, "link_libraries(${"+export.key.getContent()+"})")
+            else:
+              pass
       if (len(project) > 0):
         target = str(type(self))
         for i in range(len(project)):
@@ -2022,10 +2097,13 @@ class Target(Build):
     else:
       path = self.getPath(owner, variant, None)
     generator = None
+    architecture = None
     if (self.generator == None):
       generator = self.getGenerator(owner)
     else:
       generator = self.generator.getContent()
+      if not (self.generator.architecture == None):
+        architecture = self.generator.architecture.getContent()
     if (generator == None):
       context.log(self.node, "Generator failure!")
       return False
@@ -2040,7 +2118,7 @@ class Target(Build):
               arguments.append("-D"+key+"=\""+export[key][1].replace("\\", "/")+"\"")
             else:
               arguments.append("-D"+key+"="+export[key][1].replace("\\", "/"))
-    success = self.buildVariant(owner, generator, arguments, path, installation, variant)
+    success = self.buildVariant(owner, generator, architecture, arguments, path, installation, variant)
     if not (success):
       context.log(self.node, "Build failure!")
       return False
@@ -2051,11 +2129,11 @@ class Target(Build):
       return False
     return True
 
-  def buildVariant(self, owner, generator, arguments, path, installation, variant):
+  def buildVariant(self, owner, generator, architecture, arguments, path, installation, variant):
     if (self.subpath == None):
-      result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build").replace("\\", "/"), installation, None)
+      result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build").replace("\\", "/"), installation, None)
     else:
-      result = cmake_configure(generator, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, self.subpath.getContent()), os.path.join(path, "build").replace("\\", "/"), installation, None)
+      result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, self.subpath.getContent()), os.path.join(path, "build").replace("\\", "/"), installation, None)
     owner.getContext().log(self.node, result)
     result = cmake_build(os.path.join(path, "build").replace("\\", "/"), variant)
     owner.getContext().log(self.node, result)
@@ -2585,6 +2663,8 @@ class Context(Element):
     nodeTags.append("package")
     nodeTags.append("modules")
     nodeTags.append("module")
+    nodeTags.append("hints")
+    nodeTags.append("hint")
     for conditional in self.conditionals:
       if not (conditional in nodeTags):
         nodeTags.append(conditional)
@@ -2704,6 +2784,8 @@ class Context(Element):
     nodeParents["package"].append("packages")
     nodeParents["modules"].append("target")
     nodeParents["module"].append("modules")
+    nodeParents["hints"].append("package")
+    nodeParents["hint"].append("hints")
     
     nodeAttributes["json"].append(["key", False])
     nodeAttributes["data"].append(["id", False])
@@ -2721,6 +2803,7 @@ class Context(Element):
     nodeAttributes["target"].append(["type", False])
     nodeAttributes["target"].append(["linkage", True])
     nodeAttributes["search"].append(["type", False])
+    nodeAttributes["generator"].append(["architecture", True])
     
     
     self.nodeTags = nodeTags
@@ -3092,6 +3175,8 @@ def handle(context, node, tier, parents):
       element = BuildInstruction()
     elif (tag == "arguments"):
       element = ArgumentList()
+    elif (tag == "hints"):
+      element = HintList()
     elif (tag == "packages"):
       element = PackageList()
     elif (tag == "package"):
@@ -3100,6 +3185,10 @@ def handle(context, node, tier, parents):
       element = ModuleList()
     elif (tag == "module"):
       element = Module()
+    elif (tag == "hints"):
+      element = HintList()
+    elif (tag == "hint"):
+      element = Hint()
     elif (tag == "cmake"):
       element = CmakeBuildInstruction()
     elif (tag == "shells"):
@@ -3346,10 +3435,6 @@ def handle(context, node, tier, parents):
           else:
             context.log(node, "Labels (\""+element.getContent()+"\") must be unique!\n")
             result = False
-      elif (tag == "generator"):
-        output = ensure(node.text)+flatten(output).strip()
-        element = Generator()
-        element.string = String(output.strip())
       elif (tag == "source"):
         output = ensure(node.text)+flatten(output).strip()
         element = Path()
@@ -3357,6 +3442,10 @@ def handle(context, node, tier, parents):
       elif (tag == "argument"):
         output = ensure(node.text)+flatten(output).strip()
         element = Argument()
+        element.string = String(output.strip())
+      elif (tag == "hint"):
+        output = ensure(node.text)+flatten(output).strip()
+        element = Hint()
         element.string = String(output.strip())
       elif (tag == "module"):
         if ("label" in elements):
@@ -3408,10 +3497,20 @@ def handle(context, node, tier, parents):
             element.exports = exports
             break
           elements["exports"] = None
+        if ("hints" in elements):
+          for hints in elements["hints"]:
+            element.hints = hints
+            break
+          elements["hints"] = None
       elif (tag == "work"):
         output = ensure(node.text)+flatten(output).strip()
         element = Work()
         element.string = String(output.strip())
+      elif (tag == "hints"):
+        if ("hint" in elements):
+          for hint in elements["hint"]:
+            element.addHint(hint)
+          elements["hint"] = None
       elif (tag == "arguments"):
         if ("argument" in elements):
           for argument in elements["argument"]:
@@ -3675,6 +3774,14 @@ def handle(context, node, tier, parents):
       if (tag == "data"):
         output = ensure(context.get(node.attrib["id"])).strip()
         context.log(node, output+"\n")
+      elif (tag == "generator"):
+        output = ensure(node.text)+flatten(output).strip()
+        element = Generator()
+        element.string = String(output.strip())
+        if ("architecture" in node.attrib):
+          architecture = Architecture()
+          architecture.string = String(node.attrib["architecture"].strip())
+          element.architecture = architecture
       elif (tag == "json"):
         output = ensure(node.text)+flatten(output).strip()
         dictionary = json.loads(output.strip())
