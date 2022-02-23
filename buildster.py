@@ -2574,6 +2574,7 @@ class Context(Element):
     self.conditionals.append("switch")
     self.conditionals.append("else")
     self.conditionals.append("case")
+    self.conditionals.append("default")
     
     self.nonconditionals = []
     
