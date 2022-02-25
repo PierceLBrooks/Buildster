@@ -1428,7 +1428,7 @@ class Dependency(Build):
     return True
     
   def getExports(self, variant, need):
-    return []
+    return {}
 
 class RemoteDependency(Dependency):
   def __init__(self, url = None):
@@ -1450,7 +1450,7 @@ class RemoteDependency(Dependency):
     return True
     
   def getExports(self, variant, need):
-    return []
+    return {}
 
 class DependencyList(List):
   def __init__(self):
@@ -1468,6 +1468,12 @@ class DependencyList(List):
         if ("BUILDSTER_BUILD" in context.data):
           if not (self.content[i].label == None):
             if not (self.content[i].label.getContent() == context.data["BUILDSTER_BUILD"]):
+              if not (self.content[i].imports == None):
+                if not (self.content[i].imports.doImport(self.content[i], variant)):
+                  return False
+              if not (self.content[i].exports == None):
+                if not (self.content[i].exports.doExport(self.content[i], variant)):
+                  return False
               continue
         if not (self.content[i].build(self, variant)):
           self.getContext().log(self.node, "Dependency build failure @ "+str(i)+"!")
@@ -2255,6 +2261,12 @@ class TargetList(List):
         if ("BUILDSTER_BUILD" in context.data):
           if not (self.content[i].label == None):
             if not (self.content[i].label.getContent() == context.data["BUILDSTER_BUILD"]):
+              if not (self.content[i].imports == None):
+                if not (self.content[i].imports.doImport(self.content[i], variant)):
+                  return False
+              if not (self.content[i].exports == None):
+                if not (self.content[i].exports.doExport(self.content[i], variant)):
+                  return False
               continue
         if not (self.content[i].build(self, variant)):
           self.getContext().log(self.node, "Target build failure @ "+str(i)+"!")
@@ -2438,11 +2450,12 @@ class Project(Element):
       if not (self.targets.distribute(self, distribution, variant)):
         self.context.log(self.node, "Target list distribution failure!")
         return False
-    for root, folders, files in os.walk(path):
-      for name in files:
-        target = os.path.join(root, name).replace("\\", "/")
-        status = os.stat(target)
-        os.chmod(target, status.st_mode|stat.S_IEXEC)
+    if not (platform.system() == "Windows"):
+      for root, folders, files in os.walk(path):
+        for name in files:
+          target = os.path.join(root, name).replace("\\", "/")
+          status = os.stat(target)
+          os.chmod(target, status.st_mode|stat.S_IEXEC)
     if not (self.buildPost(variant)):
       self.context.log(self.node, "Post build step failure!")
       return False
