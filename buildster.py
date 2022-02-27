@@ -1870,7 +1870,7 @@ class Target(Build):
           if (label == self.imports.content[i].getContent()):
             if not (label in imports):
               if ("Target" in str(type(labels[label]))):
-                linkages = linkages+labels[label].getLinkages(owner)
+                linkages = linkages+labels[label].getLinkages(owner, variant)
                 includes = includes+labels[label].getIncludes(owner)
               imports[label] = []
               if not (labels[label].exports == None):
@@ -2238,9 +2238,9 @@ class Target(Build):
       result.append(root)
     return result
     
-  def getLinkages(self, owner):
+  def getLinkages(self, owner, variant):
     result = []
-    path = self.getPath(owner, None, "install")
+    path = self.getPath(owner, variant, "install")
     for root, folders, files in os.walk(path):
       result.append(root)
     return result
