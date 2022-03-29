@@ -92,6 +92,9 @@ def copy(source, destination):
       temp = os.path.join(destination, os.path.basename(source))
     else:
       return False
+  else:
+    if not (os.path.isdir(os.path.dirname(destination))):
+      os.makedirs(os.path.dirname(destination))
   try:
     if (temp == None):
       shutil.copyfile(source.replace("\\", "/"), destination.replace("\\", "/"))
@@ -551,8 +554,23 @@ class Copier(Object):
       return False
     source = self.source.getContent()
     destination = self.destination.getContent()
-    if not (copy(source, destination)):
-      return False
+    if ("*" in source):
+      for root, folders, files in os.walk(os.path.dirname(source)):
+        names = []
+        for name in folders:
+          names.append(name)
+        for name in files:
+          names.append(name)
+        for name in names:
+          if (str(os.path.basename(source)).replace("*", "") in name):
+            temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), name)
+            owner.getContext().log(None, "Copying from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"...")
+            if not (copy(os.path.join(root, name), temp)):
+              return False
+            owner.getContext().log(None, "Copied from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"!")
+    else:
+      if not (copy(source, destination)):
+        return False
     owner.getContext().log(None, "Copied from \""+self.toString(self.source)+"\" to \""+self.toString(self.destination)+"\"!")
     return True
     
@@ -2404,6 +2422,30 @@ class Project(Element):
       self.context = context
       
   def buildPre(self, variant):
+    path = None
+    if not (self.directory == None):
+      path = os.path.join(self.directory.getContent(), "build", "dependencies")
+    if not (path == None):
+      if not (os.path.exists(path)):
+        os.makedirs(path)
+    path = None
+    if not (self.directory == None):
+      path = os.path.join(self.directory.getContent(), "build", "targets")
+    if not (path == None):
+      if not (os.path.exists(path)):
+        os.makedirs(path)
+    path = None
+    if not (self.directory == None):
+      path = os.path.join(self.directory.getContent(), "install", "dependencies")
+    if not (path == None):
+      if not (os.path.exists(path)):
+        os.makedirs(path)
+    path = None
+    if not (self.directory == None):
+      path = os.path.join(self.directory.getContent(), "install", "targets")
+    if not (path == None):
+      if not (os.path.exists(path)):
+        os.makedirs(path)
     if (self.pre == None):
       return True
     if not (self.pre.build(self, os.path.join(self.directory.getContent(), os.path.basename(self.directory.getContent())), self.directory.getContent(), os.path.join(self.directory.getContent(), "install"), {}, variant)):
