@@ -4048,7 +4048,7 @@ def run(target, data):
     context.report()
   return True
 
-if (__name__ == "__main__"):
+def main():
   result = 0
   arguments = sys.argv
   length = len(arguments)
@@ -4061,3 +4061,6 @@ if (__name__ == "__main__"):
       print("Error!")
       result = -1
   sys.exit(result)
+
+if (__name__ == "__main__"):
+  main()
