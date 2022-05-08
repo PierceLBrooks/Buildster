@@ -46,7 +46,7 @@ setup(name='buildster',
       license="MIT",
       entry_points={
           'console_scripts': [
-              'scons = buildster.command_line:main',
+              'buildster = buildster.command_line:main',
               ]},
       packages=["buildster"],
       install_requires=requirements,

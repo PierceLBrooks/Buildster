@@ -14,4 +14,6 @@ if __package__ == "":
 
 if __name__ == "__main__":
     from buildster.command_line import main as _main
-    sys.exit(_main())
+    result = _main()
+    print(str(result))
+    sys.exit(result)

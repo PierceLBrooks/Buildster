@@ -9,6 +9,7 @@ import stat
 import wget
 import shlex
 import shutil
+import pathlib
 import zipfile
 import tarfile
 import inspect
@@ -20,6 +21,11 @@ import subprocess
 import xml.etree.ElementTree as xml_tree
 from datetime import datetime
 
+def contains(parent, child):
+  if (pathlib.Path(parent) in pathlib.Path(child).parents):
+    return True
+  return False
+
 def unique(duplicates):
   uniques = []
   for duplicate in duplicates:
@@ -28,6 +34,8 @@ def unique(duplicates):
   return uniques
 
 def wd():
+  if ("BUILDSTER_WD" in os.environ):
+    return os.environ["BUILDSTER_WD"]
   filename = inspect.getframeinfo(inspect.currentframe()).filename
   path = os.path.dirname(os.path.abspath(filename))
   return path
@@ -94,7 +102,8 @@ def copy(source, destination):
       return False
   else:
     if not (os.path.isdir(os.path.dirname(destination))):
-      os.makedirs(os.path.dirname(destination))
+      if (contains(wd(), os.path.dirname(destination))):
+        os.makedirs(os.path.dirname(destination))
   try:
     if (temp == None):
       shutil.copyfile(source.replace("\\", "/"), destination.replace("\\", "/"))
@@ -180,7 +189,7 @@ def execute_command(command, environment = None):
   print(str(command))
   result = None
   try:
-    result = subprocess.check_output(command, env=environment)
+    result = subprocess.check_output(command, env=environment, stderr=subprocess.STDOUT)
   except:
     return ""
   return result.decode("UTF-8")
@@ -231,7 +240,8 @@ def cmake_configure(generator, architecture, arguments, source, path, installati
     command.append("-DCMAKE_INSTALL_PREFIX="+os.path.join(installation, variant.lower()).replace("\\", "/"))
   command.append(source)
   if not (os.path.isdir(path)):
-    os.makedirs(path)
+    if (contains(wd(), path)):
+      os.makedirs(path)
   cwd = os.getcwd()
   os.chdir(path)
   result = execute_command(command, environment)
@@ -1313,7 +1323,8 @@ class CommandBuildInstruction(BuildInstruction):
     owner.getContext().log(self.node, str(command))
     owner.getContext().log(self.node, subpath)
     if not (os.path.isdir(subpath)):
-      os.makedirs(subpath)
+      if (contains(wd(), subpath)):
+        os.makedirs(subpath)
     cwd = os.getcwd()
     os.chdir(subpath)
     result = execute_command(command, owner.getContext().environment)
@@ -1729,7 +1740,8 @@ class WGetDependency(RemoteDependency):
     if (len(content) == 0):
       return False
     if not (os.path.isdir(path)):
-      os.makedirs(path)
+      if (contains(wd(), path)):
+        os.makedirs(path)
     success = True
     if not (os.path.exists(os.path.join(path, content))):
       try:
@@ -1908,7 +1920,8 @@ class Target(Build):
       context.log(self.node, "Pre build step failure!")
       return False
     if not (os.path.isdir(path)):
-      os.makedirs(path)
+      if (contains(wd(), path)):
+        os.makedirs(path)
     if not (self.packages == None):
       packages = packages+self.packages.content
     if not (self.modules == None):
@@ -1931,7 +1944,7 @@ class Target(Build):
         if not (context.project == None):
           if not (context.project.cmake_modules == None):
             if not (context.project.directory == None):
-              cmake_modules = os.path.join(wd(), context.project.directory.getContent(), context.project.cmake_modules.getContent()).replace("\\", "/")
+              cmake_modules = os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), context.project.cmake_modules.getContent()).replace("\\", "/")
               if (os.path.isdir(cmake_modules)):
                 cmake_modules = relativize(base, cmake_modules).replace("\\", "/")
                 write(descriptor, "set(CMAKE_MODULE_PATH \"${CMAKE_CURRENT_LIST_DIR}/"+cmake_modules+"\")")
@@ -2013,12 +2026,14 @@ class Target(Build):
         if (exports[export][1] == "headers"):
           headers = exports[export][0].replace("\\", "/")
           if not (os.path.isdir(headers)):
-            os.makedirs(headers)
+            if (contains(wd(), headers)):
+              os.makedirs(headers)
           write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, headers.replace("\\", "/"))+"\")")
         elif (exports[export][1] == "libraries"):
           libraries = exports[export][0].replace("\\", "/")
           if not (os.path.isdir(libraries)):
-            os.makedirs(libraries)
+            if (contains(wd(), libraries)):
+              os.makedirs(libraries)
           for root, folders, files in os.walk(libraries):
             for name in files:
               for i in range(len(owner.getContext().libraries)):
@@ -2227,7 +2242,7 @@ class Target(Build):
     
   def getPath(self, owner, variant, purpose):
     if (purpose == None):
-      return adjust(os.path.join(wd(), owner.directory.getContent(), self.label.getContent()))
+      return adjust(os.path.join(wd(), owner.getContext().root.directory.getContent(), owner.directory.getContent(), self.label.getContent()))
     if (variant == None):
       return adjust(os.path.join(wd(), owner.getContext().root.directory.getContent(), owner.directory.getContent(), purpose, "targets", self.label.getContent()))
     return adjust(os.path.join(wd(), owner.getContext().root.directory.getContent(), owner.directory.getContent(), purpose, "targets", self.label.getContent(), variant.lower()))
@@ -2424,38 +2439,42 @@ class Project(Element):
   def buildPre(self, variant):
     path = None
     if not (self.directory == None):
-      path = os.path.join(self.directory.getContent(), "build", "dependencies")
+      path = os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "build", "dependencies")
     if not (path == None):
       if not (os.path.exists(path)):
-        os.makedirs(path)
+        if (contains(wd(), path)):
+          os.makedirs(path)
     path = None
     if not (self.directory == None):
-      path = os.path.join(self.directory.getContent(), "build", "targets")
+      path = os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "build", "targets")
     if not (path == None):
       if not (os.path.exists(path)):
-        os.makedirs(path)
+        if (contains(wd(), path)):
+          os.makedirs(path)
     path = None
     if not (self.directory == None):
-      path = os.path.join(self.directory.getContent(), "install", "dependencies")
+      path = os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "install", "dependencies")
     if not (path == None):
       if not (os.path.exists(path)):
-        os.makedirs(path)
+        if (contains(wd(), path)):
+          os.makedirs(path)
     path = None
     if not (self.directory == None):
-      path = os.path.join(self.directory.getContent(), "install", "targets")
+      path = os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "install", "targets")
     if not (path == None):
       if not (os.path.exists(path)):
-        os.makedirs(path)
+        if (contains(wd(), path)):
+          os.makedirs(path)
     if (self.pre == None):
       return True
-    if not (self.pre.build(self, os.path.join(self.directory.getContent(), os.path.basename(self.directory.getContent())), self.directory.getContent(), os.path.join(self.directory.getContent(), "install"), {}, variant)):
+    if not (self.pre.build(self, os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), os.path.basename(self.directory.getContent())), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent()), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "install"), {}, variant)):
       return False
     return True
     
   def buildPost(self, variant):
     if (self.post == None):
       return True
-    if not (self.post.build(self, os.path.join(self.directory.getContent(), os.path.basename(self.directory.getContent())), self.directory.getContent(), os.path.join(self.directory.getContent(), "install"), {}, variant)):
+    if not (self.post.build(self, os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), os.path.basename(self.directory.getContent())), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent()), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "install"), {}, variant)):
       return False
     return True
       
@@ -2483,7 +2502,8 @@ class Project(Element):
     path = os.path.join(distribution, variant.lower()).replace("\\", "/")
     if (os.path.isdir(path)):
       shutil.rmtree(path)
-    os.makedirs(path)
+    if (contains(wd(), path)):
+      os.makedirs(path)
     if not (self.dependencies == None):
       if not (self.dependencies.distribute(self, distribution, variant)):
         self.context.log(self.node, "Dependency list distribution failure!")
@@ -4012,7 +4032,7 @@ def handle(context, node, tier, parents):
   #context.log(node, "NODE_END\n")
   return [result, output, elements]
 
-def run(target, data):
+def run(target, data, environment):
   variants = []
   variants.append("Debug")
   variants.append("Release")
@@ -4028,11 +4048,26 @@ def run(target, data):
     if ("BUILDSTER_VARIANT" in dictionary):
       if not (variant == dictionary["BUILDSTER_VARIANT"]):
         continue
+    for key in environment:
+      dictionary[key] = environment[key]
     tree = xml_tree.parse(target)
     base = tree.getroot()
     if not (base.tag == "buildster"):
       return False
     context = Context(dictionary, variant)
+    if ("directory" in base.attrib):
+      context.root = Buildster()
+      context.root.node = base
+      context.root.context = context
+      context.root.directory = Path(String(base.attrib["directory"]))
+    for child in base:
+      if (child.tag == "project"):
+        context.project = Project()
+        context.project.node = child
+        context.project.context = context
+        if ("directory" in child.attrib):
+          context.project.diretory = Path(String(child.attrib["directory"]))
+        break
     result = handle(context, base, 0, [None])
     if not (result[0]):
       context.report()
@@ -4048,19 +4083,27 @@ def run(target, data):
     context.report()
   return True
 
-def main():
+def main(environment = None):
   result = 0
-  arguments = sys.argv
-  length = len(arguments)
-  if (length > 1):
-    data = []
-    if (length > 2):
-      data = arguments[2:]
-    code = run(arguments[1].strip(), data)
-    if not (code):
-      print("Error!")
-      result = -1
-  sys.exit(result)
+  try:
+    arguments = sys.argv
+    length = len(arguments)
+    if (length > 1):
+      data = []
+      if (length > 2):
+        data = arguments[2:]
+      if (environment == None):
+        environment = os.environ.copy()
+      code = run(arguments[1].strip(), data, environment)
+      if not (code):
+        print("Error! "+str(code))
+        result = -1
+    else:
+      result = -2
+  except Exception as exception:
+    logging.error(traceback.format_exc())
+    result = -3
+  return result
 
 if (__name__ == "__main__"):
-  main()
+  sys.exit(main())
