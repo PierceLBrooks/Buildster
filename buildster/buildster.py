@@ -38,6 +38,8 @@ def wd():
     return os.environ["BUILDSTER_WD"]
   filename = inspect.getframeinfo(inspect.currentframe()).filename
   path = os.path.dirname(os.path.abspath(filename))
+  if not (path == os.getcwd()):
+    return os.getcwd()
   return path
 
 def write(descriptor, line):
@@ -189,10 +191,21 @@ def execute_command(command, environment = None):
   print(str(command))
   result = None
   try:
-    result = subprocess.check_output(command, env=environment, stderr=subprocess.STDOUT)
+    process = subprocess.Popen(command, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    while True:
+      line = process.stdout.readline()
+      if ((len(line) == 0) and not (process.poll() == None)):
+        break
+      print(line.decode("UTF-8").strip())
+    output = process.communicate()[0]
+    exit = process.returncode
+    if (exit == 0):
+      result = output
   except:
     return ""
-  return result.decode("UTF-8")
+  if (result == None):
+    return ""
+  return result
 
 def git_clone(repo_url, repo_path, environment = None):
   command = []
@@ -1329,7 +1342,7 @@ class CommandBuildInstruction(BuildInstruction):
     os.chdir(subpath)
     result = execute_command(command, owner.getContext().environment)
     os.chdir(cwd)
-    owner.getContext().log(self.node, result)
+    #owner.getContext().log(self.node, result)
     return True
     
   def install(self, owner, path, subpath, installation, variant):
@@ -1949,8 +1962,8 @@ class Target(Build):
                 cmake_modules = relativize(base, cmake_modules).replace("\\", "/")
                 write(descriptor, "set(CMAKE_MODULE_PATH \"${CMAKE_CURRENT_LIST_DIR}/"+cmake_modules+"\")")
       write(descriptor, "project(\""+self.label.getContent()+"Project\")")
-      write(descriptor, "set(HEADERS )")
-      write(descriptor, "set(FILES )")
+      write(descriptor, "set(BUILDSTER_HEADERS )")
+      write(descriptor, "set(BUILDSTER_FILES )")
       for i in range(len(arguments)):
         argument = arguments[i]
         if (len(argument) > 2):
@@ -2013,7 +2026,7 @@ class Target(Build):
               else:
                 write(descriptor, "link_libraries(${"+export.key.getContent()+"})")
             elif (export.export.getContent() == "files"):
-              write(descriptor, "list(APPEND FILES ${"+export.key.getContent()+"})")
+              write(descriptor, "list(APPEND BUILDSTER_FILES ${"+export.key.getContent()+"})")
             else:
               pass
       for i in range(len(definitions)):
@@ -2108,23 +2121,24 @@ class Target(Build):
           for j in range(len(owner.getContext().extensions)):
             extension = "."+owner.getContext().extensions[j]
             if (project[i].endswith(extension)):
-              write(descriptor, "list(APPEND FILES \"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, project[i].replace("\\", "/"))+"\")")
+              write(descriptor, "list(APPEND BUILDSTER_FILES \"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, project[i].replace("\\", "/"))+"\")")
               if ("Library" in target):
                 for k in range(len(owner.getContext().headers)):
                   if (extension == "."+owner.getContext().headers[k]):
-                    write(descriptor, "list(APPEND HEADERS \"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, project[i].replace("\\", "/"))+"\")")
+                    write(descriptor, "list(APPEND BUILDSTER_HEADERS \"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, project[i].replace("\\", "/"))+"\")")
+                    break
               break
         if ("Executable" in target):
-          write(descriptor, "add_executable("+self.label.getContent()+" ${FILES})")
+          write(descriptor, "add_executable("+self.label.getContent()+" ${BUILDSTER_FILES})")
           if (platform.system() == "Darwin"):
             write(descriptor, "add_custom_command(TARGET "+self.label.getContent()+" POST_BUILD COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath \"@executable_path/\" $<TARGET_FILE:"+self.label.getContent()+"> || :)")
           write(descriptor, "target_compile_features("+self.label.getContent()+" PRIVATE cxx_std_"+context.root.cpp.getContent()+")")
         elif ("Library" in target):
           if (self.linkage == None):
-            write(descriptor, "add_library("+self.label.getContent()+" ${FILES})")
+            write(descriptor, "add_library("+self.label.getContent()+" ${BUILDSTER_FILES})")
           else:
-            write(descriptor, "add_library("+self.label.getContent()+" "+self.linkage.getContent().upper()+" "+"${FILES})")
-          write(descriptor, "set_target_properties("+self.label.getContent()+" PROPERTIES PUBLIC_HEADER \"${HEADERS}\")")
+            write(descriptor, "add_library("+self.label.getContent()+" "+self.linkage.getContent().upper()+" "+"${BUILDSTER_FILES})")
+          write(descriptor, "set_target_properties("+self.label.getContent()+" PROPERTIES PUBLIC_HEADER \"${BUILDSTER_HEADERS}\")")
           write(descriptor, "target_compile_features("+self.label.getContent()+" PRIVATE cxx_std_"+context.root.cpp.getContent()+")")
         else:
           pass
@@ -2210,7 +2224,7 @@ class Target(Build):
               command.append("$ORIGIN")
               command.append(destination)
               result = execute_command(command)
-              owner.getContext().log(self.node, result)
+              #owner.getContext().log(self.node, result)
               success = True
             except:
               success = False
@@ -2250,13 +2264,13 @@ class Target(Build):
   def getLabel(self):
     return self.label.getContent()
     
-  def getFiles(self, owner, filter = None):
+  def getFiles(self, owner, pattern = None):
     result = []
     path = self.getPath(owner, None, None)
     for root, folders, files in os.walk(path):
       for name in files:
-        if not (filter == None):
-          match = re.search(filter, name)
+        if not (pattern == None):
+          match = re.search(pattern, name)
           if (match == None):
             continue
           if not (match.group() == name):

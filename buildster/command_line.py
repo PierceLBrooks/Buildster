@@ -4,7 +4,7 @@ import shlex
 import logging
 import traceback
 import subprocess
-from buildster import buildster
+from buildster import buildster as build
 
 def main():
     environment = os.environ.copy()
@@ -22,16 +22,15 @@ def main():
             arguments = arguments[0]
         command.append(sys.executable)
         command.append("-c")
-        command.append("import sys; from buildster import buildster; arguments = []; "+arguments+"; sys.argv += arguments; print(str(sys.argv)); buildster.main()")
+        command.append("import sys; from buildster import buildster as build; arguments = []; "+arguments+"; sys.argv += arguments; print(str(sys.argv)); build.main()")
         print(str(command))
         result = ""
         try:
-            result = subprocess.check_output(command, env=environment, stderr=subprocess.STDOUT)
-            result = result.decode("UTF-8")
+            result = build.execute_command(command, environment)
         except Exception as exception:
             result = ""
             logging.error(traceback.format_exc())
-        print(result.strip())
+        #print(result.strip())
     else:
-        print(str(buildster.main(environment)))
+        print(str(build.main(environment)))
     return 0
