@@ -645,7 +645,7 @@ class Extractor(Object):
         break
     if (index < 0):
       return False
-    extension = filename[index:]
+    extension = filename[index:].lower()
     filename = filename[:index]
     if (os.path.exists(os.path.join(path, filename))):
       owner.getContext().log(None, "Extracted \""+self.toString(self.path)+"\"!")
@@ -653,7 +653,7 @@ class Extractor(Object):
     if (extension == ".zip"):
       if not (unzip(content, os.path.join(path, filename))):
         return False
-    elif (extension.startswith(".tar")):
+    elif ((extension == ".tgz") or (extension == ".txz") or (extension == ".tbz") or (extension.startswith(".tar"))):
       if not (untar(content, os.path.join(path, filename))):
         return False
     else:
@@ -2512,6 +2512,22 @@ class Project(Element):
       if not (self.targets.distribute(self, distribution, variant)):
         self.context.log(self.node, "Target list distribution failure!")
         return False
+    for root, folders, files in os.walk(path):
+      for name in files:
+        target = os.path.join(root, name).replace("\\", "/")
+        index = -1
+        for i in range(len(name)):
+          if (name[i:(i+1)] == "."):
+            index = i
+            break
+        if (index < 0):
+          continue
+        extension = name[index:]
+        if (len(extension) < 2):
+          continue
+        extension = extension[1:].lower()
+        if ((extension in self.context.sources) or (extension in self.context.headers) or (extension in self.context.scripts)):
+          os.unlink(target)
     if not (platform.system() == "Windows"):
       for root, folders, files in os.walk(path):
         for name in files:
@@ -2603,30 +2619,48 @@ class Context(Element):
 
     self.extensions = []
     
-    self.extensions.append("c")
-    self.extensions.append("cc")
-    self.extensions.append("cpp")
-    self.extensions.append("h")
-    self.extensions.append("hpp")
-    self.extensions.append("inl")
-    self.extensions.append("dll")
-    self.extensions.append("a")
-    self.extensions.append("so")
-    self.extensions.append("lib")
-    self.extensions.append("dylib")
     self.extensions.append("exe")
     
     self.headers = []
     
     self.headers.append("h")
+    self.headers.append("hh")
     self.headers.append("hpp")
+    self.headers.append("hxx")
+    self.headers.append("h++")
+    self.headers.append("i")
+    self.headers.append("ii")
+    self.headers.append("ipp")
+    self.headers.append("ixx")
+    self.headers.append("i++")
     self.headers.append("inl")
+    self.headers.append("inc")
+    self.headers.append("t")
+    self.headers.append("tt")
+    self.headers.append("tpp")
+    self.headers.append("txx")
+    self.headers.append("t++")
+    self.headers.append("tpl")
     
     self.sources = []
     
     self.sources.append("c")
     self.sources.append("cc")
     self.sources.append("cpp")
+    self.sources.append("cxx")
+    self.sources.append("c++")
+    self.sources.append("cs")
+    self.sources.append("m")
+    self.sources.append("objc")
+    self.sources.append("swift")
+    
+    self.scripts = []
+    
+    self.scripts.append("java")
+    self.scripts.append("py")
+    self.scripts.append("rb")
+    self.scripts.append("sh")
+    self.scripts.append("bat")
     
     self.libraries = []
     
@@ -2635,6 +2669,9 @@ class Context(Element):
     self.libraries.append("lib")
     self.libraries.append("dylib")
     self.libraries.append("so")
+    self.libraries.append("jar")
+    
+    self.extensions = self.headers+self.sources+self.scripts+self.libraries+self.extensions
     
     self.substitutes = []
     
