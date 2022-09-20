@@ -3,12 +3,16 @@
 
 import re
 import os
+import ast
 import sys
+import copy
 import json
 import stat
 import wget
 import shlex
 import shutil
+import base64
+import difflib
 import pathlib
 import zipfile
 import tarfile
@@ -63,6 +67,8 @@ def flatten(output, prefix = "", suffix = ""):
 def ensure(string):
   if (string == None):
     return ""
+  if (type(string) == list):
+    return flatten(string)
   if not (type(string) == str):
     return ""
   return string
@@ -93,22 +99,30 @@ def find(base, leaf, prefixes = [""]):
             return os.path.join(root, name)
   return None
 
-def copy(source, destination):
-  temp = None
+def move(source, destination, context = None):
+  src = ""
+  dst = ""
+  if not (os.path.exists(source)):
+    if not (context == None):
+      if not (context.work == None):
+        src = os.path.join(context.work, source)
+        if not (os.path.exists(src)):
+          src = ""
   if (os.path.exists(destination)):
     if (os.path.isdir(destination)):
-      temp = os.path.join(destination, os.path.basename(source))
+      dst += os.path.join(destination, os.path.basename(source))
     else:
       return False
   else:
     if not (os.path.isdir(os.path.dirname(destination))):
       if (contains(wd(), os.path.dirname(destination))):
         os.makedirs(os.path.dirname(destination))
+  if (len(src) == 0):
+    src += source
+  if (len(dst) == 0):
+    dst += destination
   try:
-    if (temp == None):
-      shutil.copyfile(source.replace("\\", "/"), destination.replace("\\", "/"))
-    else:
-      shutil.copyfile(source.replace("\\", "/"), temp.replace("\\", "/"))
+    shutil.copyfile(src.replace("\\", "/"), dst.replace("\\", "/"))
   except:
     return False
   return True
@@ -192,7 +206,7 @@ def execute_command(command, environment = None):
     result = subprocess.check_output(command, env=environment, stderr=subprocess.STDOUT)
   except:
     return ""
-  return result.decode("UTF-8")
+  return result.decode("utf-8")
 
 def git_clone(repo_url, repo_path, environment = None):
   command = []
@@ -575,11 +589,11 @@ class Copier(Object):
           if (str(os.path.basename(source)).replace("*", "") in name):
             temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), name)
             owner.getContext().log(None, "Copying from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"...")
-            if not (copy(os.path.join(root, name), temp)):
+            if not (move(os.path.join(root, name), temp, owner.getContext())):
               return False
             owner.getContext().log(None, "Copied from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"!")
     else:
-      if not (copy(source, destination)):
+      if not (move(source, destination, owner.getContext())):
         return False
     owner.getContext().log(None, "Copied from \""+self.toString(self.source)+"\" to \""+self.toString(self.destination)+"\"!")
     return True
@@ -1049,7 +1063,7 @@ class ImportList(List):
     return super(ImportList, self).add(add)
     
 class BuildInstruction(Object):
-  def __init__(self, arguments = None, pre = None, post = None):
+  def __init__(self, arguments = None, pre = None, post = None, timing = None):
     super(BuildInstruction, self).__init__()
     self.arguments = None
     if (type(arguments) == ArgumentList):
@@ -1060,6 +1074,9 @@ class BuildInstruction(Object):
     self.post = None
     if (type(post) == PostBuildInstruction):
       self.post = post
+    self.timing = None
+    if (type(timing) == String):
+      self.timing = timing
     
   def build(self, owner, path, subpath, installation, imports, variant):
     return True
@@ -1159,13 +1176,23 @@ class CmakeBuildInstruction(BuildInstruction):
             else:
               arguments.append("-D"+key+"="+export[key][1].replace("\\", "/"))
     if not (self.getPre() == None):
-      if not (self.getPre().build(owner, path, subpath, installation, imports, variant)):
-        return False
+      if not (self.getPre().timing == None):
+        if (self.getPre().timing.getContent() == "build"):
+          if not (self.getPre().build(owner, path, subpath, installation, imports, variant)):
+            return False
+      else:
+        if not (self.getPre().build(owner, path, subpath, installation, imports, variant)):
+          return False
     if not (self.buildVariant(owner, arguments, cmake, installation, variant)):
       return False
     if not (self.getPost() == None):
-      if not (self.getPost().build(owner, path, subpath, installation, imports, variant)):
-        return False
+      if not (self.getPost().timing == None):
+        if (self.getPost().timing.getContent() == "build"):
+          if not (self.getPost().build(owner, path, subpath, installation, imports, variant)):
+            return False
+      else:
+        if not (self.getPost().build(owner, path, subpath, installation, imports, variant)):
+          return False
     return True
 
   def buildVariant(self, owner, arguments, cmake, installation, variant):
@@ -1204,8 +1231,13 @@ class ShellsBuildInstruction(BuildInstruction):
   def build(self, owner, path, subpath, installation, imports, variant):
     length = len(self.shells)
     if not (self.getPre() == None):
-      if not (self.getPre().build(owner, path, subpath, installation, imports, variant)):
-        return False
+      if not (self.getPre().timing == None):
+        if (self.getPre().timing.getContent() == "build"):
+          if not (self.getPre().build(owner, path, subpath, installation, imports, variant)):
+            return False
+      else:
+        if not (self.getPre().build(owner, path, subpath, installation, imports, variant)):
+          return False
     for i in range(length):
       if ("ShellBuildInstruction" in str(type(self.shells[i]))):
         if not (self.shells[i].build(owner, path, subpath, installation, imports, variant)):
@@ -1214,8 +1246,13 @@ class ShellsBuildInstruction(BuildInstruction):
         owner.getContext().log(self.node, str(type(self.shells[i])))
         return False
     if not (self.getPost() == None):
-      if not (self.getPost().build(owner, path, subpath, installation, imports, variant)):
-        return False
+      if not (self.getPost().timing == None):
+        if (self.getPost().timing.getContent() == "build"):
+          if not (self.getPost().build(owner, path, subpath, installation, imports, variant)):
+            return False
+      else:
+        if not (self.getPost().build(owner, path, subpath, installation, imports, variant)):
+          return False
     return True
     
   def install(self, owner, path, subpath, installation, variant):
@@ -1239,8 +1276,10 @@ class ShellBuildInstruction(BuildInstruction):
       return False
     if not ("Work" in str(type(self.work))):
       return False
+    owner.getContext().work = self.work.getContent()
     if not (self.commands.build(owner, self.getPath(path, subpath), self.work.getContent(), installation, imports, variant)):
       return False
+    owner.getContext().work = None
     return True
     
   def install(self, owner, path, subpath, installation, variant):
@@ -1282,6 +1321,9 @@ class CommandBuildInstruction(BuildInstruction):
     
   def build(self, owner, path, subpath, installation, imports, variant):
     mature = False
+    if not (os.path.isdir(subpath)):
+      if (contains(wd(), subpath)):
+        os.makedirs(subpath)
     if not (len(self.extracts) == 0):
       for i in range(len(self.extracts)):
         extract = self.extracts[i]
@@ -1322,9 +1364,6 @@ class CommandBuildInstruction(BuildInstruction):
     owner.getContext().log(self.node, self.string.getContent())
     owner.getContext().log(self.node, str(command))
     owner.getContext().log(self.node, subpath)
-    if not (os.path.isdir(subpath)):
-      if (contains(wd(), subpath)):
-        os.makedirs(subpath)
     cwd = os.getcwd()
     os.chdir(subpath)
     result = execute_command(command, owner.getContext().environment)
@@ -1410,11 +1449,11 @@ class Dependency(Build):
               if (context.exclude(name)):
                 continue
               if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
-                if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
+                if not (move(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
                   return False
         elif (os.path.isfile(export[1])):
           if not (os.path.exists(os.path.join(distribution, variant.lower(), os.path.basename(export[1])))):
-            if not (copy(export[1].replace("\\", "/"), os.path.join(distribution, variant.lower(), os.path.basename(export[1])).replace("\\", "/"))):
+            if not (move(export[1].replace("\\", "/"), os.path.join(distribution, variant.lower(), os.path.basename(export[1])).replace("\\", "/"))):
               return False
           if (os.path.isdir(os.path.dirname(export[1]))):
             for root, folders, files in os.walk(os.path.dirname(export[1])):
@@ -1422,7 +1461,7 @@ class Dependency(Build):
                 if (context.exclude(name)):
                   continue
                 if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
-                  if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
+                  if not (move(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
                     return False
       elif (export[0] == "all"):
         if (os.path.isdir(export[1])):
@@ -1432,7 +1471,7 @@ class Dependency(Build):
                 if (context.exclude(name)):
                   continue
                 if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
-                  if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
+                  if not (move(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
                     return False
           if (os.path.isdir(os.path.join(export[1], "lib"))):
             for root, folders, files in os.walk(os.path.join(export[1], "lib")):
@@ -1440,7 +1479,7 @@ class Dependency(Build):
                 if (context.exclude(name)):
                   continue
                 if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
-                  if not (copy(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
+                  if not (move(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
                     return False
     return True
     
@@ -1752,7 +1791,7 @@ class WGetDependency(RemoteDependency):
           if not (os.path.exists(os.path.join(path, filename))):
             success = False
           else:
-            if not (copy(os.path.join(path, filename), os.path.join(path, content))):
+            if not (move(os.path.join(path, filename), os.path.join(path, content))):
               success = False
             else:
               if not (os.path.exists(os.path.join(path, content))):
@@ -1915,7 +1954,13 @@ class Target(Build):
         if not (key in exports):
           exports[key] = [value, export.export.getContent()]
     if not (self.pre == None):
-      success = self.pre.build(owner, subpath, path, installation, imports, variant)
+      if not (self.pre.timing == None):
+        if not (self.pre.timing.getContent() == "build"):
+          success = False
+      if (success):
+        success = self.pre.build(owner, subpath, path, installation, imports, variant)
+      else:
+        success = True
     if not (success):
       context.log(self.node, "Pre build step failure!")
       return False
@@ -2162,7 +2207,13 @@ class Target(Build):
       context.log(self.node, "Build failure!")
       return False
     if not (self.post == None):
-      success = self.post.build(owner, subpath, path, installation, imports, variant)
+      if not (self.post.timing == None):
+        if not (self.post.timing.getContent() == "build"):
+          success = False
+      if (success):
+        success = self.post.build(owner, subpath, path, installation, imports, variant)
+      else:
+        success = True
     if not (success):
       context.log(self.node, "Post build step failure!")
       return False
@@ -2189,7 +2240,7 @@ class Target(Build):
       return False
     source = installation.replace("\\", "/")
     destination = os.path.join(distribution, variant.lower(), os.path.basename(installation)).replace("\\", "/")
-    if not (copy(source, destination)):
+    if not (move(source, destination)):
       return False
     if not (platform.system() == "Linux"):
       return True
@@ -2467,6 +2518,9 @@ class Project(Element):
           os.makedirs(path)
     if (self.pre == None):
       return True
+    if not (self.pre.timing == None):
+      if not (self.pre.timing.getContent() == "build"):
+        return True
     if not (self.pre.build(self, os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), os.path.basename(self.directory.getContent())), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent()), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "install"), {}, variant)):
       return False
     return True
@@ -2474,6 +2528,9 @@ class Project(Element):
   def buildPost(self, variant):
     if (self.post == None):
       return True
+    if not (self.post.timing == None):
+      if not (self.post.timing.getContent() == "build"):
+        return True
     if not (self.post.build(self, os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), os.path.basename(self.directory.getContent())), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent()), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "install"), {}, variant)):
       return False
     return True
@@ -2641,11 +2698,21 @@ class Context(Element):
     self.substitutes.append("distribution")
     self.substitutes.append("origin")
     self.substitutes.append("install")
+    self.substitutes.append("python")
+    self.substitutes.append("execute")
+    self.substitutes.append("encode")
+    self.substitutes.append("decode")
+    self.substitutes.append("escape")
+    self.substitutes.append("unescape")
+    self.substitutes.append("lower")
+    self.substitutes.append("upper")
+    self.substitutes.append("exists")
     
     self.conditionals = []
     
     self.conditionals.append("if")
     self.conditionals.append("if_check")
+    self.conditionals.append("if_exists")
     self.conditionals.append("switch")
     self.conditionals.append("else")
     self.conditionals.append("case")
@@ -2743,6 +2810,14 @@ class Context(Element):
     nodeTags.append("module")
     nodeTags.append("hints")
     nodeTags.append("hint")
+    nodeTags.append("python")
+    nodeTags.append("execute")
+    nodeTags.append("encode")
+    nodeTags.append("decode")
+    nodeTags.append("escape")
+    nodeTags.append("unescape")
+    nodeTags.append("lower")
+    nodeTags.append("upper")
     for conditional in self.conditionals:
       if not (conditional in nodeTags):
         nodeTags.append(conditional)
@@ -2768,6 +2843,14 @@ class Context(Element):
       nodeParents[tag] = parents
       nodeAttributes[tag] = attributes
     
+    nodeParents["lower"].append(self.any)
+    nodeParents["upper"].append(self.any)
+    nodeParents["python"].append(self.any)
+    nodeParents["execute"].append(self.any)
+    nodeParents["encode"].append(self.any)
+    nodeParents["decode"].append(self.any)
+    nodeParents["escape"].append(self.any)
+    nodeParents["unescape"].append(self.any)
     nodeParents["set"].append(self.any)
     nodeParents["search"].append(self.any)
     nodeParents["distribution"].append(self.any)
@@ -2781,10 +2864,12 @@ class Context(Element):
     nodeParents["log"].append(self.any)
     nodeParents["if"].append(self.any)
     nodeParents["if_check"].append(self.any)
+    nodeParents["if_exists"].append(self.any)
     nodeParents["switch"].append(self.any)
     nodeParents["case"].append("switch")
     nodeParents["else"].append("if")
     nodeParents["else"].append("if_check")
+    nodeParents["else"].append("if_exists")
     #nodeParents["buildster"].append("")
     nodeParents["project"].append("buildster")
     nodeParents["dependencies"].append("project")
@@ -2880,6 +2965,8 @@ class Context(Element):
     nodeAttributes["export"].append(["type", False])
     nodeAttributes["target"].append(["type", False])
     nodeAttributes["target"].append(["linkage", True])
+    nodeAttributes["pre"].append(["timing", True])
+    nodeAttributes["post"].append(["timing", True])
     nodeAttributes["search"].append(["type", False])
     nodeAttributes["generator"].append(["architecture", True])
     
@@ -2903,6 +2990,8 @@ class Context(Element):
     self.tier = 0
     self.root = None
     self.project = None
+    self.error = None
+    self.work = None
     self.context = self
     self.nodes = {}
     self.logs = []
@@ -2923,6 +3012,7 @@ class Context(Element):
   def build(self, owner, variant):
     self.tier = None
     self.log(self.node, "CONTEXT_BUILD_BEGIN\n")
+    self.data["BUILDSTER_VARIANT"] = variant
     for i in range(len(self.projects)):
       if (self.projects[i] == None):
         continue
@@ -2952,25 +3042,31 @@ class Context(Element):
     self.log(self.node, "CONTEXT_DISTRIBUTE_END\n")
     return True
     
-  def check(self, node, parent):
+  def check(self, node, parent, parents = None):
     tag = node.tag
     if (tag == "label"):
       if (parent == None):
         return True
+    if not (parents == None):
+      parents = copy.deepcopy(parents)
+      for i in range(len(parents)):
+        if (parents[i] == None):
+          continue
+        parents[i] = parents[i].tag
     if not (tag in self.nodeTags):
-      self.record(node, "Node Tag Error...")
+      self.record(node, "Node Tag Error @ (\""+str(tag)+"\" | \""+str(parents)+"\")...")
       return False
     if (parent == None):
       if (tag in self.nodeParents):
-        self.record(node, "Node Parent Error 1...")
+        self.record(node, "Node Parent Error 1 @ (\""+str(tag)+"\" | \""+str(parents)+"\")...")
         return False
     else:
       if not (tag in self.nodeParents):
-        self.record(node, "Node Parent Error 2...")
+        self.record(node, "Node Parent Error 2 @ (\""+str(tag)+"\" | \""+str(parents)+"\")...")
         return False
       if not (self.any in self.nodeParents[tag]):
         if not (parent.tag in self.nodeParents[tag]):
-          self.record(node, "Node Parent Error 3...")
+          self.record(node, "Node Parent Error 3 (\""+str(parent.tag)+"\" | \""+str(self.nodeParents[tag])+"\") @ (\""+str(tag)+"\" | \""+str(parents)+"\")...")
           return False
     if (tag in self.nodeAttributes):
       attributes = self.nodeAttributes[tag]
@@ -2979,9 +3075,19 @@ class Context(Element):
         attribute = attribute[0]
         if not (attribute in node.attrib):
           if not (optional):
-            self.record(node, "Node Attribute Error...")
+            self.record(node, "Node Attribute Error @ (\""+str(tag)+"\" | \""+str(parents)+"\")...")
             return False
     return True
+    
+  def optional(self, node, attribute):
+    tag = node.tag
+    if (tag in self.nodeAttributes):
+      attributes = self.nodeAttributes[tag]
+      for i in range(len(attributes)):
+        optional = attributes[i][1]
+        if ((optional) and (attribute == attributes[i][0])):
+          return True
+    return False
     
   def exclude(self, leaf):
     for exclusion in self.exclusions:
@@ -3016,7 +3122,12 @@ class Context(Element):
     print(self.logs[len(self.logs)-1])
   
   def record(self, node, message):
-    self.records.append([self.tier, message, node])
+    record = []
+    record.append(self.tier)
+    record.append(message)
+    record.append(node)
+    record.append(traceback.format_list(traceback.extract_stack()))
+    self.records.append(record)
     
   def report(self):
     self.tier = None
@@ -3024,8 +3135,15 @@ class Context(Element):
     length = len(self.records)
     for i in range(length):
       record = self.records[i]
+      stack = record[3]
       self.tier = record[0]
       self.log(record[2], record[1])
+      """
+      if (self.debug):
+        for j in range(len(stack)):
+          frame = stack[j]
+          self.log(record[2], frame)
+      """
     self.tier = None
     self.log(None, "CONTEXT_REPORT_END\n")
     
@@ -3044,7 +3162,7 @@ def handle(context, node, tier, parents):
   parent = parents[len(parents)-1]
   quit = False
   result = True
-  tag = node.tag
+  tag = node.tag.lower()
   output = []
   elements = {}
   element = None
@@ -3052,10 +3170,12 @@ def handle(context, node, tier, parents):
   context.tier = tier
   context.log(node, tag)
   #context.log(node, "NODE_BEGIN\n")
-  if (context.check(node, parent)):
+  if (context.check(node, parent, parents)):
     element = None
-    if ((tag in context.conditionals) and ("id" in node.attrib)):
-      id = node.attrib["id"]
+    if ((tag in context.conditionals) and (("id" in node.attrib) or (context.optional(node, "id")))):
+      id = None
+      if ("id" in node.attrib):
+        id = node.attrib["id"]
       if (tag == "if"):
         if not (context.find(id)):
           context.log(node, id+" does not exist in data!")
@@ -3123,6 +3243,55 @@ def handle(context, node, tier, parents):
           if not (children):
             return null
           return [result, output, elements]
+      elif (tag == "if_exists"):
+          exists = None
+          for child in parent:
+            if (child.tag == "exists"):
+              exists = child
+              break
+          if not (exists == None):
+            call = handle(context, exists, tier, parents)
+            if not (call[0]):
+              context.log(node, "A \"if_exists\" node was blocked by a descendant \"exists\"!\n")
+              return null
+            else:
+              exists = ensure(exists.text).strip()+ensure(call[1]).strip()
+              exists = exists.strip()
+              if not (os.path.exists(exists)):
+                context.log(node, id+" does not match \""+exists+"\" check!")
+                children = False
+                for child in node:
+                  if (child.tag == "else"):
+                    children = True
+                    context.tier = tier
+                    call = handle(context, child, tier+1, parents+[node])
+                    if not (call[0]):
+                      result = False
+                      break
+                    if (child.tag in context.conditionals):
+                      output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+                    elif (child.tag in context.nonconditionals):
+                      output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+                    for key in call[2]:
+                      value = call[2][key]
+                      if not (value == None):
+                        for i in range(len(value)):
+                          if not (value[i] == None):
+                            if (child.tag in context.conditionals):
+                              if not (key in elements):
+                                elements[key] = []
+                              elements[key].append(value[i])
+                            else:
+                              if not (child.tag in elements):
+                                elements[child.tag] = []
+                              elements[child.tag].append(value[i])
+                    break
+                if not (children):
+                  return null
+                return [result, output, elements]
+          else:
+            context.report(node, "No \"exists\" descendant for \"if_exists\" node!\n")
+            return null
       elif (tag == "switch"):
         id = node.attrib["id"]
         children = False
@@ -3187,15 +3356,37 @@ def handle(context, node, tier, parents):
         return null
     elif (tag == "else"):
       if (parent.tag in context.conditionals):
-        id = parent.attrib["id"]
+        id = None
+        if ("id" in parent.attrib):
+          id = parent.attrib["id"]
         if (parent.tag == "if"):
           if (context.find(id)):
-            context.log(node, id+" does not exist in data!")
+            context.log(node, str(id)+" does exist in data for else case!")
             return null
         elif (parent.tag == "if_check"):
           check = parent.attrib["check"]
           if (ensure(context.get(id)).strip() == check):
-            context.log(node, id+" does not match \""+check+"\" check!")
+            context.log(node, str(id)+" does match \""+check+"\" check for else case!")
+            return null
+        elif (parent.tag == "if_exists"):
+          exists = None
+          for child in parent:
+            if (child.tag == "exists"):
+              exists = child
+              break
+          if not (exists == None):
+            call = handle(context, exists, tier, parents)
+            if not (call[0]):
+              context.log(node, "A \"if_exists\" node was blocked by a descendant \"exists\"!\n")
+              return null
+            else:
+              exists = ensure(exists.text).strip()+ensure(call[1]).strip()
+              exists = exists.strip()
+              if (os.path.exists(exists)):
+                context.log(node, str(id)+" does match \""+exists+"\" check for else case!")
+                return null
+          else:
+            context.report(node, "No \"exists\" descendant for \"if_exists\" node!\n")
             return null
         else:
           return null
@@ -3223,6 +3414,7 @@ def handle(context, node, tier, parents):
         element.cmake_modules = Path(String(node.attrib["cmake_modules"].strip()))
       if not (element in context.projects):
         context.projects.append(element)
+      context.project = element
     elif (tag == "dependencies"):
       element = DependencyList()
     elif (tag == "targets"):
@@ -3247,8 +3439,12 @@ def handle(context, node, tier, parents):
         element.linkage = String(node.attrib["linkage"].strip())
     elif (tag == "pre"):
       element = PreBuildInstruction()
+      if ("timing" in node.attrib):
+        element.timing = String(node.attrib["timing"].strip())
     elif (tag == "post"):
       element = PostBuildInstruction()
+      if ("timing" in node.attrib):
+        element.timing = String(node.attrib["timing"].strip())
     elif (tag == "build"):
       element = BuildInstruction()
     elif (tag == "arguments"):
@@ -3311,16 +3507,24 @@ def handle(context, node, tier, parents):
       element = Term()
     children = False
     for child in node:
+      if (child.tag == "exists"):
+        call = ["", ensure(child.tail).strip()]
+        context.log(node, "A \""+str(tag)+"\" had a \"exists\" child that was replaced with \""+str(call)+"\"")
+        output.append(call)
+        continue
       children = True
       context.tier = tier
       call = handle(context, child, tier+1, parents+[node])
       if not (call[0]):
         result = False
         break
-      if (child.tag in context.conditionals):
+      if (child.tag.lower() in context.conditionals):
         output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
-      elif ((child.tag in context.nonconditionals) or (child.tag in context.substitutes)):
-        output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+      elif ((child.tag.lower() in context.nonconditionals) or (child.tag.lower() in context.substitutes)):
+        if (child.tag.lower() in context.substitutes):
+          output.append([ensure(call[1]), ensure(child.tail)])
+        else:
+          output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
       for key in call[2]:
         value = call[2][key]
         if not (value == None):
@@ -3335,7 +3539,7 @@ def handle(context, node, tier, parents):
                   elements[child.tag] = []
                 elements[child.tag].append(value[i])
     context.tier = tier
-    #context.log(tag)
+    context.log(node, tag)
     success = True
     if not (tag in context.nodeAttributes):
       if (tag == "key"):
@@ -3623,11 +3827,19 @@ def handle(context, node, tier, parents):
         if ("pre" in elements):
           for pre in elements["pre"]:
             element.pre = pre
+            if not (pre.timing == None):
+              if (pre.timing.getContent() == "parse"):
+                if not (pre.build(context.project, os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), os.path.basename(context.project.directory.getContent())), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent()), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), "install"), {}, context.variant)):
+                  context.error = "Parse time pre build stop failure!"
             break
           elements["pre"] = None
         if ("post" in elements):
           for post in elements["post"]:
             element.post = post
+            if not (post.timing == None):
+              if (post.timing.getContent() == "parse"):
+                if not (post.build(context.project, os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), os.path.basename(context.project.directory.getContent())), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent()), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), "install"), {}, context.variant)):
+                  context.error = "Parse time post build stop failure!"
             break
           elements["post"] = None
       elif (tag == "cmake"):
@@ -3727,8 +3939,39 @@ def handle(context, node, tier, parents):
       elif (tag == "delete"):
         output = ensure(node.text)+flatten(output).strip()
         element.path = Path(String(output.strip()))
+      elif (tag == "exists"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = output.strip()
       elif (tag == "distribution"):
         output = adjust(os.path.join(wd(), context.root.directory.getContent(), context.root.distribution.getContent(), context.variant.lower())).replace("\\", "/")
+      elif (tag == "python"):
+        output = sys.executable.replace("\\", "/")
+      elif (tag == "execute"):
+        output = ensure(node.text)+flatten(output).strip()
+        command = shlex.split(output.strip())
+        output = execute_command(command, context.environment).strip()
+        print(output)
+        if (output == None):
+          output = ""
+      elif (tag == "escape"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = repr(output.strip())[1:]
+        output = output[:(len(output)-1)]
+      elif (tag == "unescape"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = ast.literal_eval(F'"""{output.strip()}"""')
+      elif (tag == "lower"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = output.strip().lower()
+      elif (tag == "upper"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = output.strip().upper()
+      elif (tag == "encode"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = base64.b64encode(output.strip().encode("ascii")).decode("ascii")
+      elif (tag == "decode"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = base64.b64decode(output.strip().encode("ascii")).decode("ascii")
       elif (tag == "install"):
         dependency = get_parent(parents, "dependency")
         if not (dependency == None):
@@ -3739,10 +3982,10 @@ def handle(context, node, tier, parents):
               temp = handle(context, label, tier, [None])
               output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "dependencies", temp[1], context.variant.lower())).replace("\\", "/")
             else:
-              context.log(node, "No \"project\" ancestor for \"label\" node!\n")
+              context.report(node, "No \"project\" ancestor for \"label\" node!\n")
               result = False
           else:
-            context.log(node, "No \"label\" descendant for \"dependency\" node!\n")
+            context.report(node, "No \"label\" descendant for \"dependency\" node!\n")
             result = False
         else:
           target = get_parent(parents, "target")
@@ -3754,17 +3997,17 @@ def handle(context, node, tier, parents):
                 temp = handle(context, label, tier, [None])
                 output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "targets", temp[1], context.variant.lower())).replace("\\", "/")
               else:
-                context.log(node, "No \"project\" ancestor for \"label\" node!\n")
+                context.report(node, "No \"project\" ancestor for \"label\" node!\n")
                 result = False
             else:
-              context.log(node, "No \"label\" descendant for \"target\" node!\n")
+              context.report(node, "No \"label\" descendant for \"target\" node!\n")
               result = False
           else:
             project = get_parent(parents, "project")
             if not (project == None):
               output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"])).replace("\\", "/")
             else:
-              context.log(node, "No \"dependency\", \"target\", or \"project\" ancestor for \"install\" node!\n")
+              context.report(node, "No \"dependency\", \"target\", or \"project\" ancestor for \"install\" node!\n")
               result = False
       elif (tag == "origin"):
         dependency = get_parent(parents, "dependency")
@@ -3776,10 +4019,10 @@ def handle(context, node, tier, parents):
               temp = handle(context, label, tier, [None])
               output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "build", "dependencies", temp[1])).replace("\\", "/")
             else:
-              context.log(node, "No \"project\" ancestor for \"label\" node!\n")
+              context.report(node, "No \"project\" ancestor for \"label\" node!\n")
               result = False
           else:
-            context.log(node, "No \"label\" descendant for \"dependency\" node!\n")
+            context.report(node, "No \"label\" descendant for \"dependency\" node!\n")
             result = False
         else:
           target = get_parent(parents, "target")
@@ -3791,17 +4034,17 @@ def handle(context, node, tier, parents):
                 temp = handle(context, label, tier, [None])
                 output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], temp[1])).replace("\\", "/")
               else:
-                context.log(node, "No \"project\" ancestor for \"label\" node!\n")
+                context.report(node, "No \"project\" ancestor for \"label\" node!\n")
                 result = False
             else:
-              context.log(node, "No \"label\" descendant for \"target\" node!\n")
+              context.report(node, "No \"label\" descendant for \"target\" node!\n")
               result = False
           else:
             project = get_parent(parents, "project")
             if not (project == None):
               output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"])).replace("\\", "/")
             else:
-              context.log(node, "No \"dependency\", \"target\", or \"project\" ancestor for \"origin\" node!\n")
+              context.report(node, "No \"dependency\", \"target\", or \"project\" ancestor for \"origin\" node!\n")
               result = False
       elif (tag == "default"):
         output = ensure(node.text)+flatten(output).strip()
@@ -3830,28 +4073,44 @@ def handle(context, node, tier, parents):
             element.value = value
             break
           elements["value"] = None
-      elif (tag == "pre"):
-        element = PreBuildInstruction()
-        for key in elements:
-          for value in elements[key]:
-            element.instructions.append(value)
-        if (parent.tag == "project"):
-          context.projects[len(context.projects)-1].pre = element
-          context.projects[len(context.projects)-1].buildPre(context.variant)
-      elif (tag == "post"):
-        element = PostBuildInstruction()
-        for key in elements:
-          for value in elements[key]:
-            element.instructions.append(value)
-        if (parent.tag == "project"):
-          context.projects[len(context.projects)-1].post = element
-          context.projects[len(context.projects)-1].buildPost(context.variant)
       else:
         success = False
     else:
       if (tag == "data"):
         output = ensure(context.get(node.attrib["id"])).strip()
         context.log(node, output+"\n")
+      elif (tag == "pre"):
+        for key in elements:
+          for value in elements[key]:
+            element.instructions.append(value)
+        if (parent.tag == "project"):
+          context.projects[len(context.projects)-1].pre = element
+          if not (element.timing == None):
+            if (element.timing.getContent() == "discover"):
+              context.projects[len(context.projects)-1].buildPre(context.variant)
+          else:
+            context.projects[len(context.projects)-1].buildPre(context.variant)
+        else:
+          if not (element.timing == None):
+            if (element.timing.getContent() == "discover"):
+              if not (element.build(context.project, os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), os.path.basename(context.project.directory.getContent())), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent()), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), "install"), {}, context.variant)):
+                context.error = "Discover time pre build stop failure!"
+      elif (tag == "post"):
+        for key in elements:
+          for value in elements[key]:
+            element.instructions.append(value)
+        if (parent.tag == "project"):
+          context.projects[len(context.projects)-1].post = element
+          if not (element.timing == None):
+            if (element.timing.getContent() == "discover"):
+              context.projects[len(context.projects)-1].buildPost(context.variant)
+          else:
+            context.projects[len(context.projects)-1].buildPost(context.variant)
+        else:
+          if not (element.timing == None):
+            if (element.timing.getContent() == "discover"):
+              if not (element.build(context.project, os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), os.path.basename(context.project.directory.getContent())), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent()), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), "install"), {}, context.variant)):
+                context.error = "Discover time post build stop failure!"
       elif (tag == "generator"):
         output = ensure(node.text)+flatten(output).strip()
         element = Generator()
@@ -3882,15 +4141,23 @@ def handle(context, node, tier, parents):
         if ("pre" in elements):
           for pre in elements["pre"]:
             element.pre = pre
+            if not (pre.timing == None):
+              if (pre.timing.getContent() == "parse"):
+                element.buildPre(context.variant)
+            else:
+              element.buildPre(context.variant)
             break
           elements["pre"] = None
-          element.buildPre(context.variant)
         if ("post" in elements):
           for post in elements["post"]:
             element.post = post
+            if not (post.timing == None):
+              if (post.timing.getContent() == "parse"):
+                element.buildPost(context.variant)
+            else:
+              element.buildPost(context.variant)
             break
           elements["post"] = None
-          element.buildPost(context.variant)
         context.log(node, element.toString()+"\n")
       elif (tag == "buildster"):
         context.log(node, element.toString()+"\n")
@@ -3944,11 +4211,19 @@ def handle(context, node, tier, parents):
         if ("pre" in elements):
           for pre in elements["pre"]:
             element.pre = pre
+            if not (pre.timing == None):
+              if (pre.timing.getContent() == "parse"):
+                if not (pre.build(context.project, os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), os.path.basename(context.project.directory.getContent())), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent()), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), "install"), {}, variant)):
+                  context.error = "Parse time pre build stop failure!"
             break
           elements["pre"] = None
         if ("post" in elements):
           for post in elements["post"]:
             element.post = post
+            if not (post.timing == None):
+              if (post.timing.getContent() == "parse"):
+                if not (post.build(context.project, os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), os.path.basename(context.project.directory.getContent())), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent()), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), "install"), {}, variant)):
+                  context.error = "Parse time post build stop failure!"
             break
           elements["post"] = None
         context.log(node, element.toString()+"\n")
@@ -4020,6 +4295,9 @@ def handle(context, node, tier, parents):
           output = ensure(node.text)+flatten(output).strip()
           context.log(node, output+"\n")
   else:
+    result = False
+  if not (context.error == None):
+    context.report(node, str(context.error))
     result = False
   if not (result):
     context.log(node, "Error!")
