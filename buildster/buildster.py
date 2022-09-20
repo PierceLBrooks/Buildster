@@ -12,7 +12,6 @@ import wget
 import shlex
 import shutil
 import base64
-import difflib
 import pathlib
 import zipfile
 import tarfile
@@ -337,6 +336,16 @@ class Element(Object):
   def getContent(self):
     return ""
     
+class Performer(Object):
+  def __init__(self):
+    super(Performer, self).__init__()
+    
+  def perform(self, context):
+    return True
+    
+  def getContent(self):
+    return ""
+    
 class Build(Element):
   def __init(self):
     super(Build, self).__init__()
@@ -542,7 +551,7 @@ class CopierDestination(Object):
   def __str__(self):
     return "<"+self.toString(self.path)+">"
     
-class Writer(Object):
+class Writer(Performer):
   def __init__(self, destination = None, content = None):
     super(Writer, self).__init__()
     self.destination = None
@@ -555,8 +564,8 @@ class Writer(Object):
   def getContent(self):
     return self.destination.getContent()
     
-  def perform(self, owner):
-    owner.getContext().log(None, "Writing \""+self.toString(self.destination)+"\"...")
+  def perform(self, context):
+    context.log(None, "Writing \""+self.toString(self.destination)+"\"...")
     if ((self.destination == None) or (self.content == None)):
       return False
     content = self.getContent().strip()
@@ -566,13 +575,13 @@ class Writer(Object):
     if not (write(descriptor, self.content.getContent())):
       return False
     descriptor.close()
-    owner.getContext().log(None, "Wrote \""+self.toString(self.destination)+"\"!")
+    context.log(None, "Wrote \""+self.toString(self.destination)+"\"!")
     return True
     
   def __str__(self):
     return "<"+self.toString(self.destination)+", "+self.toString(self.content)+">"
 
-class Copier(Object):
+class Copier(Performer):
   def __init__(self, source = None, destination = None):
     super(Copier, self).__init__()
     self.source = None
@@ -582,11 +591,8 @@ class Copier(Object):
     if (type(destination) == CopierDestination):
       self.destination = destination
       
-  def getContent(self):
-    return ""
-    
-  def perform(self, owner):
-    owner.getContext().log(None, "Copying from \""+self.toString(self.source)+"\" to \""+self.toString(self.destination)+"\"...")
+  def perform(self, context):
+    context.log(None, "Copying from \""+self.toString(self.source)+"\" to \""+self.toString(self.destination)+"\"...")
     if ((self.source == None) or (self.destination == None)):
       return False
     source = self.source.getContent()
@@ -601,20 +607,20 @@ class Copier(Object):
         for name in names:
           if (str(os.path.basename(source)).replace("*", "") in name):
             temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), name)
-            owner.getContext().log(None, "Copying from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"...")
-            if not (move(os.path.join(root, name), temp, owner.getContext())):
+            context.log(None, "Copying from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"...")
+            if not (move(os.path.join(root, name), temp, context)):
               return False
-            owner.getContext().log(None, "Copied from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"!")
+            context.log(None, "Copied from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"!")
     else:
-      if not (move(source, destination, owner.getContext())):
+      if not (move(source, destination, context)):
         return False
-    owner.getContext().log(None, "Copied from \""+self.toString(self.source)+"\" to \""+self.toString(self.destination)+"\"!")
+    context.log(None, "Copied from \""+self.toString(self.source)+"\" to \""+self.toString(self.destination)+"\"!")
     return True
     
   def __str__(self):
     return "<"+self.toString(self.source)+", "+self.toString(self.destination)+">"
 
-class Deleter(Object):
+class Deleter(Performer):
   def __init__(self, path = None):
     super(Deleter, self).__init__()
     self.path = None
@@ -624,27 +630,27 @@ class Deleter(Object):
   def getContent(self):
     return self.path.getContent()
     
-  def perform(self, owner):
-    owner.getContext().log(None, "Deleting \""+self.toString(self.path)+"\"...")
+  def perform(self, context):
+    context.log(None, "Deleting \""+self.toString(self.path)+"\"...")
     if (self.path == None):
       return False
     content = self.getContent().strip()
     if (len(content) == 0):
       return False
     if not (os.path.exists(content)):
-      owner.getContext().log(None, "Deleted \""+self.toString(self.path)+"\"!")
+      context.log(None, "Deleted \""+self.toString(self.path)+"\"!")
       return True
     if (os.path.isfile(content)):
       os.unlink(content)
     else:
       shutil.rmtree(content)
-    owner.getContext().log(None, "Deleted \""+self.toString(self.path)+"\"!")
+    context.log(None, "Deleted \""+self.toString(self.path)+"\"!")
     return True
     
   def __str__(self):
     return "<"+self.toString(self.path)+">"
     
-class Extractor(Object):
+class Extractor(Performer):
   def __init__(self, path = None):
     super(Extractor, self).__init__()
     self.path = None
@@ -654,8 +660,8 @@ class Extractor(Object):
   def getContent(self):
     return self.path.getContent()
     
-  def perform(self, owner):
-    owner.getContext().log(None, "Extracting \""+self.toString(self.path)+"\"...")
+  def perform(self, context):
+    context.log(None, "Extracting \""+self.toString(self.path)+"\"...")
     if (self.path == None):
       return False
     content = self.getContent().strip()
@@ -675,7 +681,7 @@ class Extractor(Object):
     extension = filename[index:].lower()
     filename = filename[:index]
     if (os.path.exists(os.path.join(path, filename))):
-      owner.getContext().log(None, "Extracted \""+self.toString(self.path)+"\"!")
+      context.log(None, "Extracted \""+self.toString(self.path)+"\"!")
       return True
     if (extension == ".zip"):
       if not (unzip(content, os.path.join(path, filename))):
@@ -685,7 +691,7 @@ class Extractor(Object):
         return False
     else:
       return False
-    owner.getContext().log(None, "Extracted \""+self.toString(self.path)+"\"!")
+    context.log(None, "Extracted \""+self.toString(self.path)+"\"!")
     return True
     
   def __str__(self):
@@ -1331,6 +1337,7 @@ class CommandBuildInstruction(BuildInstruction):
     self.copies = []
     self.deletes = []
     self.writes = []
+    self.setters = []
     
   def build(self, owner, path, subpath, installation, imports, variant):
     mature = False
@@ -1369,6 +1376,14 @@ class CommandBuildInstruction(BuildInstruction):
         if not (wrote.perform(owner.getContext())):
           return False
       mature = True
+    if not (len(self.setters) == 0):
+      for i in range(len(self.setters)):
+        setter = self.setters[i]
+        if (setter == None):
+          continue
+        if not (setter.perform(owner.getContext())):
+          return False
+      mature = True
     if (mature):
       return True
     if (self.string == None):
@@ -1388,9 +1403,9 @@ class CommandBuildInstruction(BuildInstruction):
     return True
     
   def __str__(self):
-    return "<"+self.toString(self.string)+", "+self.toString(self.extracts)+", "+self.toString(self.copies)+", "+self.toString(self.deletes)+">"
+    return "<"+self.toString(self.string)+", "+self.toString(self.extracts)+", "+self.toString(self.copies)+", "+self.toString(self.deletes)+", "+self.toString(self.writes)+", "+self.toString(self.setters)+">"
     
-class Setter(BuildInstruction):
+class Setter(BuildInstruction, Performer):
   def __init__(self, key = None, value = None):
     super(Setter, self).__init__()
     self.key = None
@@ -1401,10 +1416,13 @@ class Setter(BuildInstruction):
       self.value = value
       
   def build(self, owner, path, subpath, installation, imports, variant):
+    return self.perform(owner.getContext())
+    
+  def perform(self, context):
     if not ((self.key == None) or (self.value == None)):
-      owner.getContext().data[self.key.getContent()] = self.value.getContent()
-      owner.getContext().environment[self.key.getContent()] = self.value.getContent()
-      owner.getContext().log(self.node, "<\""+self.key.getContent()+"\" -> \""+self.value.getContent()+"\">")
+      context.data[self.key.getContent()] = self.value.getContent()
+      context.environment[self.key.getContent()] = self.value.getContent()
+      context.log(self.node, "<\""+self.key.getContent()+"\" -> \""+self.value.getContent()+"\">")
       return True
     return False
     
@@ -2750,6 +2768,7 @@ class Context(Element):
     self.substitutes.append("origin")
     self.substitutes.append("install")
     self.substitutes.append("python")
+    self.substitutes.append("home")
     self.substitutes.append("execute")
     self.substitutes.append("encode")
     self.substitutes.append("decode")
@@ -2862,6 +2881,7 @@ class Context(Element):
     nodeTags.append("hints")
     nodeTags.append("hint")
     nodeTags.append("python")
+    nodeTags.append("home")
     nodeTags.append("execute")
     nodeTags.append("encode")
     nodeTags.append("decode")
@@ -2897,6 +2917,7 @@ class Context(Element):
     nodeParents["lower"].append(self.any)
     nodeParents["upper"].append(self.any)
     nodeParents["python"].append(self.any)
+    nodeParents["home"].append(self.any)
     nodeParents["execute"].append(self.any)
     nodeParents["encode"].append(self.any)
     nodeParents["decode"].append(self.any)
@@ -3962,6 +3983,10 @@ def handle(context, node, tier, parents):
           for wrote in elements["write"]:
             element.writes.append(wrote)
           elements["write"] = None
+        if ("set" in elements):
+          for setter in elements["set"]:
+            element.writes.append(setter)
+          elements["set"] = None
       elif (tag == "write"):
         if ("destination" in elements):
           for destination in elements["destination"]:
@@ -3997,6 +4022,8 @@ def handle(context, node, tier, parents):
         output = adjust(os.path.join(wd(), context.root.directory.getContent(), context.root.distribution.getContent(), context.variant.lower())).replace("\\", "/")
       elif (tag == "python"):
         output = sys.executable.replace("\\", "/")
+      elif (tag == "home"):
+        output = str(pathlib.Path.home()).replace("\\", "/")
       elif (tag == "execute"):
         output = ensure(node.text)+flatten(output).strip()
         command = shlex.split(output.strip())
