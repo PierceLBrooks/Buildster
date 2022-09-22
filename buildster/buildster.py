@@ -910,8 +910,39 @@ class HintList(List):
       return False
     return super(HintList, self).add(hint)
     
+class Variable(Element):
+  def __init__(self, key = None, value = None):
+    super(Variable, self).__init__()
+    self.key = None
+    self.value = None
+    if (type(key) == Key):
+      self.key = key
+    if (type(value) == Value):
+      self.value = value
+      
+  def build(self, owner, variant):
+    return True
+    
+  def getContent(self):
+    return self.key.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.key)+", "+self.toString(self.value)+">"
+    
+class VariableList(List):
+  def __init__(self):
+    super(VariableList, self).__init__()
+    
+  def build(self, owner, variant):
+    return True
+        
+  def addVariable(self, variable):
+    if not (isinstance(variable, Variable)):
+      return False
+    return super(VariableList, self).add(variable)
+    
 class Package(Element):
-  def __init__(self, label = None, exports = None, hints = None):
+  def __init__(self, label = None, exports = None, hints = None, variables = None):
     super(Package, self).__init__()
     self.label = Label(String(""))
     if (type(label) == Label):
@@ -922,6 +953,9 @@ class Package(Element):
     self.hints = None
     if (type(hints) == HintList):
       self.hints = hints
+    self.variables = None
+    if (type(variables) == VariableList):
+      self.variables = variables
       
   def build(self, owner, variant):
     return True
@@ -930,7 +964,7 @@ class Package(Element):
     return self.label.getContent()
     
   def __str__(self):
-    return "<"+self.toString(self.label)+", "+self.toString(self.exports)+", "+self.toString(self.hints)+">"
+    return "<"+self.toString(self.label)+", "+self.toString(self.exports)+", "+self.toString(self.hints)+", "+self.toString(self.variables)+">"
     
 class PackageList(List):
   def __init__(self):
@@ -2187,6 +2221,7 @@ class Target(Build):
         if (package == None):
           continue
         hints = None
+        variables = None
         if not (package.hints == None):
           hints = ""
           for j in range(len(package.hints.content)):
@@ -2199,10 +2234,25 @@ class Target(Build):
             hints += hint
           if (len(hints) == 0):
             hints = None
+        if not (package.variables == None):
+          variables = []
+          for j in range(len(package.variables.content)):
+            variable = package.variables.content[j]
+            if (variable == None):
+              continue
+            if ((variable.key == None) or (variable.value == None)):
+              continue
+            variable = "set("+variable.key.getContent()+" "+variable.value.getContent()+")"
+            variables.append(variable)
+          if (len(variables) == 0):
+            variables = None
         if (hints == None):
           write(descriptor, "find_package("+package.getContent()+" REQUIRED)")
         else:
           write(descriptor, "pkg_search_module("+package.getContent()+" REQUIRED "+hints+")")
+        if not (variables == None):
+          for variable in variables:
+            write(descriptor, variable)
         if not (package.exports == None):
           for j in range(len(package.exports.content)):
             export = package.exports.content[j]
@@ -2218,6 +2268,9 @@ class Target(Build):
               write(descriptor, "link_libraries(${"+export.key.getContent()+"})")
             else:
               pass
+      if (platform.system() == "Linux"):
+        write(descriptor, "find_package(Threads REQUIRED)")
+        write(descriptor, "link_libraries(${CMAKE_THREAD_LIBS_INIT})")
       if (len(project) > 0):
         target = str(type(self))
         for i in range(len(project)):
@@ -2915,6 +2968,8 @@ class Context(Element):
     nodeTags.append("set")
     nodeTags.append("pre")
     nodeTags.append("post")
+    nodeTags.append("variables")
+    nodeTags.append("variable")
     nodeTags.append("packages")
     nodeTags.append("package")
     nodeTags.append("modules")
@@ -3007,6 +3062,8 @@ class Context(Element):
     nodeParents["label"].append("module")
     nodeParents["definitions"].append("target")
     nodeParents["definition"].append("definitions")
+    nodeParents["key"].append("variable")
+    nodeParents["value"].append("variable")
     nodeParents["key"].append("definition")
     nodeParents["value"].append("definition")
     nodeParents["key"].append("export")
@@ -3057,6 +3114,8 @@ class Context(Element):
     nodeParents["post"].append("build")
     nodeParents["pre"].append("target")
     nodeParents["post"].append("target")
+    nodeParents["variables"].append("package")
+    nodeParents["variable"].append("variables")
     nodeParents["packages"].append("target")
     nodeParents["package"].append("packages")
     nodeParents["modules"].append("target")
@@ -3563,8 +3622,10 @@ def handle(context, node, tier, parents):
       element = BuildInstruction()
     elif (tag == "arguments"):
       element = ArgumentList()
-    elif (tag == "hints"):
-      element = HintList()
+    elif (tag == "variables"):
+      element = VariableList()
+    elif (tag == "variable"):
+      element = Variable()
     elif (tag == "packages"):
       element = PackageList()
     elif (tag == "package"):
@@ -3845,6 +3906,17 @@ def handle(context, node, tier, parents):
         output = ensure(node.text)+flatten(output).strip()
         element = Hint()
         element.string = String(output.strip())
+      elif (tag == "variable"):
+        if ("key" in elements):
+          for key in elements["key"]:
+            element.key = key
+            break
+          elements["key"] = None
+        if ("value" in elements):
+          for value in elements["value"]:
+            element.value = value
+            break
+          elements["value"] = None
       elif (tag == "module"):
         if ("label" in elements):
           for label in elements["label"]:
@@ -3900,6 +3972,11 @@ def handle(context, node, tier, parents):
             element.hints = hints
             break
           elements["hints"] = None
+        if ("variables" in elements):
+          for variables in elements["variables"]:
+            element.variables = variables
+            break
+          elements["variables"] = None
       elif (tag == "work"):
         output = ensure(node.text)+flatten(output).strip()
         element = Work()
@@ -3909,6 +3986,11 @@ def handle(context, node, tier, parents):
           for hint in elements["hint"]:
             element.addHint(hint)
           elements["hint"] = None
+      elif (tag == "variables"):
+        if ("variable" in elements):
+          for variable in elements["variable"]:
+            element.addVariable(variable)
+          elements["variable"] = None
       elif (tag == "arguments"):
         if ("argument" in elements):
           for argument in elements["argument"]:
