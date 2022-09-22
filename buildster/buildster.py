@@ -100,7 +100,7 @@ def find(base, leaf, prefixes = [""]):
             return os.path.join(root, name)
   return None
 
-def move(source, destination, context = None):
+def move(source, destination, context = None, rename = None):
   src = ""
   dst = ""
   if not (os.path.exists(source)):
@@ -111,7 +111,10 @@ def move(source, destination, context = None):
           src = ""
   if (os.path.exists(destination)):
     if (os.path.isdir(destination)):
-      dst += os.path.join(destination, os.path.basename(source))
+      if (rename == None):
+        dst += os.path.join(destination, os.path.basename(source))
+      else:
+        dst += os.path.join(destination, rename)
     else:
       return False
   else:
@@ -122,6 +125,8 @@ def move(source, destination, context = None):
     src += source
   if (len(dst) == 0):
     dst += destination
+  if not (context == None):
+    context.log(None, "\""+src+"\" -> \""+dst+"\"")
   try:
     shutil.copyfile(src.replace("\\", "/"), dst.replace("\\", "/"))
   except:
@@ -313,8 +318,17 @@ class Object(object):
     other = arguments[0]
     if (other == None):
       return "/NULL/"
-    if ((str(type(other)).strip() == "str") or (str(type(other)).strip() == "list")):
+    if (type(other) == str):
       return str(other)
+    if (type(other) == list):
+      length = len(other)
+      string = "["
+      for i in range(length):
+        string += self.toString(other[i])
+        if not (i == length-1):
+          string += ", "
+      string += "]"
+      return string
     if not (isinstance(other, Object)):
       return "/INVALID/"
     return other.toString()
@@ -551,6 +565,19 @@ class CopierDestination(Object):
   def __str__(self):
     return "<"+self.toString(self.path)+">"
     
+class CopierRename(Object):
+  def __init__(self, name = None):
+    super(CopierRename, self).__init__()
+    self.name = None
+    if (type(name) == String):
+      self.name = name
+      
+  def getContent(self):
+    return self.name.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.name)+">"
+    
 class Writer(Performer):
   def __init__(self, destination = None, content = None):
     super(Writer, self).__init__()
@@ -582,14 +609,17 @@ class Writer(Performer):
     return "<"+self.toString(self.destination)+", "+self.toString(self.content)+">"
 
 class Copier(Performer):
-  def __init__(self, source = None, destination = None):
+  def __init__(self, source = None, destination = None, rename = None):
     super(Copier, self).__init__()
     self.source = None
     self.destination = None
+    self.rename = None
     if (type(source) == CopierSource):
       self.source = string
     if (type(destination) == CopierDestination):
       self.destination = destination
+    if (type(rename) == CopierRename):
+      self.rename = rename
       
   def perform(self, context):
     context.log(None, "Copying from \""+self.toString(self.source)+"\" to \""+self.toString(self.destination)+"\"...")
@@ -597,6 +627,9 @@ class Copier(Performer):
       return False
     source = self.source.getContent()
     destination = self.destination.getContent()
+    rename = None
+    if not (self.rename == None):
+      rename = self.rename.getContent()
     if ("*" in source):
       for root, folders, files in os.walk(os.path.dirname(source)):
         names = []
@@ -606,19 +639,23 @@ class Copier(Performer):
           names.append(name)
         for name in names:
           if (str(os.path.basename(source)).replace("*", "") in name):
-            temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), name)
+            temp = None
+            if (rename == None):
+              temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), name)
+            else:
+              temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), rename)
             context.log(None, "Copying from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"...")
-            if not (move(os.path.join(root, name), temp, context)):
+            if not (move(os.path.join(root, name), temp, context, rename)):
               return False
             context.log(None, "Copied from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"!")
     else:
-      if not (move(source, destination, context)):
+      if not (move(source, destination, context, rename)):
         return False
     context.log(None, "Copied from \""+self.toString(self.source)+"\" to \""+self.toString(self.destination)+"\"!")
     return True
     
   def __str__(self):
-    return "<"+self.toString(self.source)+", "+self.toString(self.destination)+">"
+    return "<"+self.toString(self.source)+", "+self.toString(self.destination)+", "+self.toString(self.rename)+">"
 
 class Deleter(Performer):
   def __init__(self, path = None):
@@ -1111,6 +1148,9 @@ class BuildInstruction(Object):
   
   def getPost(self):
     return self.post
+  
+  def __str__(self):
+    return "<BuildInstruction()>"
     
 class PreBuildInstruction(BuildInstruction):
   def __init__(self):
@@ -2655,7 +2695,7 @@ class Project(Element):
     return self.owner.context.root.getDisribution()
     
   def __str__(self):
-    return "<"+self.toString(self.dependencies)+", "+self.toString(self.targets)+", "+self.toString(self.directory)+">"
+    return "<"+self.toString(self.dependencies)+", "+self.toString(self.targets)+", "+self.toString(self.directory)+", "+self.toString(self.pre)+", "+self.toString(self.post)+">"
 
 class Buildster(Element):
   def __init__(self, directory = None, distribution = None, cpp = None, context = None):
@@ -2864,6 +2904,7 @@ class Context(Element):
     nodeTags.append("write")
     nodeTags.append("extract")
     nodeTags.append("copy")
+    nodeTags.append("rename")
     nodeTags.append("delete")
     nodeTags.append("from")
     nodeTags.append("to")
@@ -3005,6 +3046,7 @@ class Context(Element):
     nodeParents["copy"].append("command")
     nodeParents["delete"].append("command")
     nodeParents["write"].append("command")
+    nodeParents["rename"].append("copy")
     nodeParents["from"].append("copy")
     nodeParents["to"].append("copy")
     nodeParents["destination"].append("write")
@@ -3561,6 +3603,8 @@ def handle(context, node, tier, parents):
       element = CopierSource()
     elif (tag == "to"):
       element = CopierDestination()
+    elif (tag == "rename"):
+      element = CopierRename()
     elif (tag == "definition"):
       element = Definition()
     elif (tag == "definitions"):
@@ -3937,6 +3981,9 @@ def handle(context, node, tier, parents):
       elif (tag == "to"):
         output = ensure(node.text)+flatten(output).strip()
         element.path = Path(String(output.strip()))
+      elif (tag == "rename"):
+        output = ensure(node.text)+flatten(output).strip()
+        element.name = String(output.strip())
       elif (tag == "destination"):
         output = ensure(node.text)+flatten(output).strip()
         element.path = Path(String(output.strip()))
@@ -4009,6 +4056,11 @@ def handle(context, node, tier, parents):
             element.destination = destination
             break
           elements["to"] = None
+        if ("rename" in elements):
+          for rename in elements["rename"]:
+            element.rename = rename
+            break
+          elements["rename"] = None
       elif (tag == "extract"):
         output = ensure(node.text)+flatten(output).strip()
         element.path = Path(String(output.strip()))
