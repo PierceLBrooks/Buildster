@@ -30,7 +30,7 @@ requirements.append("wget")
 if (platform.system().lower() == "linux"):
     requirements.append("pypatchelf")
 setup(name='buildster',
-      version='1.0',
+      version='1.1',
       maintainer="Pierce L. Brooks",
       maintainer_email="piercebrks@gmail.com",
       author="Pierce L. Brooks",
