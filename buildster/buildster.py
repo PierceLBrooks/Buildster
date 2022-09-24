@@ -25,6 +25,14 @@ import subprocess
 import xml.etree.ElementTree as xml_tree
 from datetime import datetime
 
+def chmod(left, right):
+  success = True
+  try:
+    os.chmod(left, right)
+  except:
+    success = False
+  return success
+
 def existence(path):
   if ("*" in str(os.path.basename(path))):
     if (os.path.isdir(os.path.dirname(path))):
@@ -1460,9 +1468,12 @@ class CommandBuildInstruction(BuildInstruction):
     
   def build(self, owner, path, subpath, installation, imports, variant):
     mature = False
-    if not (os.path.isdir(subpath)):
-      if (contains(wd(), subpath)):
-        os.makedirs(subpath)
+    try:
+      if not (os.path.isdir(subpath)):
+        if (contains(wd(), subpath)):
+          os.makedirs(subpath)
+    except:
+      pass
     if not (len(self.extracts) == 0):
       for i in range(len(self.extracts)):
         extract = self.extracts[i]
@@ -1699,6 +1710,13 @@ class DependencyList(List):
         if not (self.content[i].build(self, variant)):
           self.getContext().log(self.node, "Dependency build failure @ "+str(i)+"!")
           return False
+        installation = self.content[i].getPath(owner, variant, "install").replace("\\", "/")
+        if (os.path.isdir(installation)):
+          for root, folders, files in os.walk(installation):
+            for name in files:
+              target = os.path.join(root, name).replace("\\", "/")
+              status = os.stat(target)
+              chmod(target, status.st_mode|stat.S_IEXEC)
     return True
     
   def distribute(self, owner, distribution, variant):
@@ -2528,6 +2546,13 @@ class TargetList(List):
         if not (self.content[i].build(self, variant)):
           self.getContext().log(self.node, "Target build failure @ "+str(i)+"!")
           return False
+        installation = self.content[i].getPath(owner, variant, "install").replace("\\", "/")
+        if (os.path.isdir(installation)):
+          for root, folders, files in os.walk(installation):
+            for name in files:
+              target = os.path.join(root, name).replace("\\", "/")
+              status = os.stat(target)
+              chmod(target, status.st_mode|stat.S_IEXEC)
     return True
     
   def distribute(self, owner, distribution, variant):
@@ -2763,7 +2788,7 @@ class Project(Element):
         for name in files:
           target = os.path.join(root, name).replace("\\", "/")
           status = os.stat(target)
-          os.chmod(target, status.st_mode|stat.S_IEXEC)
+          chmod(target, status.st_mode|stat.S_IEXEC)
     if not (self.buildPost(variant)):
       self.context.log(self.node, "Post build step failure!")
       return False
