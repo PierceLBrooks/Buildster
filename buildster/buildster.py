@@ -12,6 +12,7 @@ import wget
 import shlex
 import shutil
 import base64
+import fnmatch
 import pathlib
 import zipfile
 import tarfile
@@ -23,6 +24,21 @@ import traceback
 import subprocess
 import xml.etree.ElementTree as xml_tree
 from datetime import datetime
+
+def existence(path):
+  if ("*" in str(os.path.basename(path))):
+    if (os.path.isdir(os.path.dirname(path))):
+      for root, folders, files in os.walk(os.path.dirname(path)):
+        for name in folders:
+          if (fnmatch.fnmatch(name, str(os.path.basename(path)))):
+            return True
+        for name in files:
+          if (fnmatch.fnmatch(name, str(os.path.basename(path)))):
+            return True
+  else:
+    if (os.path.exists(path)):
+      return True
+  return False
 
 def contains(parent, child):
   if (pathlib.Path(parent) in pathlib.Path(child).parents):
@@ -101,37 +117,65 @@ def find(base, leaf, prefixes = [""]):
   return None
 
 def move(source, destination, context = None, rename = None):
+  success = True
   src = ""
   dst = ""
+  extension = None
+  index = -1
   if not (os.path.exists(source)):
     if not (context == None):
       if not (context.work == None):
-        src = os.path.join(context.work, source)
+        if ("*" in source):
+          if (os.path.isdir(context.work)):
+            for root, folders, files in os.walk(context.work):
+              for name in files:
+                if (fnmatch.fnmatch(name, os.path.basename(source))):
+                  src = os.path.join(root, name)
+                  break
+        else:
+          src = os.path.join(context.work, source)
         if not (os.path.exists(src)):
           src = ""
+  if (len(src) == 0):
+    src += source
+  for i in range(len(src)):
+    if (src[i:(i+1)] == "."):
+      index = i
+  if (index > -1):
+    extension = src[index:]
   if (os.path.exists(destination)):
     if (os.path.isdir(destination)):
       if (rename == None):
         dst += os.path.join(destination, os.path.basename(source))
       else:
         dst += os.path.join(destination, rename)
+        if not (extension == None):
+          if not (dst.endswith(extension)):
+            dst += extension
     else:
       return False
   else:
     if not (os.path.isdir(os.path.dirname(destination))):
       if (contains(wd(), os.path.dirname(destination))):
         os.makedirs(os.path.dirname(destination))
-  if (len(src) == 0):
-    src += source
+        if (rename == None):
+          dst = destination
+        else:
+          os.makedirs(destination)
+          dst = os.path.join(destination, rename)
+          if not (extension == None):
+            if not (dst.endswith(extension)):
+              dst += extension
   if (len(dst) == 0):
     dst += destination
   if not (context == None):
     context.log(None, "\""+src+"\" -> \""+dst+"\"")
   try:
     shutil.copyfile(src.replace("\\", "/"), dst.replace("\\", "/"))
-  except:
-    return False
-  return True
+  except Exception as exception:
+    logging.error(traceback.format_exc())
+    success = False
+  return success
   
 def unzip(source, destination):
   success = True
@@ -206,6 +250,8 @@ def get_child(node, tag):
   return None
   
 def execute_command(command, environment = None):
+  if (len(command) == 0):
+    return True
   print(str(command))
   result = None
   try:
@@ -622,36 +668,35 @@ class Copier(Performer):
       self.rename = rename
       
   def perform(self, context):
-    context.log(None, "Copying from \""+self.toString(self.source)+"\" to \""+self.toString(self.destination)+"\"...")
     if ((self.source == None) or (self.destination == None)):
       return False
+    context.log(None, "Copying from \""+self.source.getContent()+"\" to \""+self.destination.getContent()+"\"...")
     source = self.source.getContent()
     destination = self.destination.getContent()
     rename = None
     if not (self.rename == None):
       rename = self.rename.getContent()
-    if ("*" in source):
-      for root, folders, files in os.walk(os.path.dirname(source)):
-        names = []
-        for name in folders:
-          names.append(name)
-        for name in files:
-          names.append(name)
-        for name in names:
-          if (str(os.path.basename(source)).replace("*", "") in name):
-            temp = None
-            if (rename == None):
-              temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), name)
-            else:
-              temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), rename)
-            context.log(None, "Copying from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"...")
-            if not (move(os.path.join(root, name), temp, context, rename)):
-              return False
-            context.log(None, "Copied from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"!")
+    if ("*" in str(os.path.basename(source))):
+      if (os.path.isdir(os.path.dirname(source))):
+        for root, folders, files in os.walk(os.path.dirname(source)):
+          for name in files:
+            if (fnmatch.fnmatch(name, str(os.path.basename(source)))):
+              temp = None
+              if (rename == None):
+                temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), name)
+              else:
+                temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), rename)
+              context.log(None, "Copying from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"...")
+              if not (move(os.path.join(root, name), temp, context, rename)):
+                return False
+              context.log(None, "Copied from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"!")
+      else:
+        if not (move(source, destination, context, rename)):
+          return False
     else:
       if not (move(source, destination, context, rename)):
         return False
-    context.log(None, "Copied from \""+self.toString(self.source)+"\" to \""+self.toString(self.destination)+"\"!")
+    context.log(None, "Copied from \""+self.source.getContent()+"\" to \""+self.destination.getContent()+"\"!")
     return True
     
   def __str__(self):
@@ -1462,6 +1507,9 @@ class CommandBuildInstruction(BuildInstruction):
       return True
     if (self.string == None):
       return False
+    command = self.string.getContent().strip()
+    if (len(command) == 0):
+      return True
     command = shlex.split(self.string.getContent().replace("\\", "/"))
     owner.getContext().log(self.node, self.string.getContent())
     owner.getContext().log(self.node, str(command))
@@ -2207,7 +2255,7 @@ class Target(Build):
             for j in range(len(links)):
               for root, folders, files in os.walk(links[j]):
                 for name in files:
-                  if (link.replace("*", "") in name):
+                  if (fnmatch.fnmatch(name, link)):
                     for k in range(len(owner.getContext().libraries)):
                       if (name.endswith("."+owner.getContext().libraries[k])):
                         write(descriptor, "link_libraries(\""+name+"\")")
@@ -3430,7 +3478,7 @@ def handle(context, node, tier, parents):
             else:
               exists = ensure(exists.text).strip()+ensure(call[1]).strip()
               exists = exists.strip()
-              if not (os.path.exists(exists)):
+              if not (existence(exists)):
                 context.log(node, id+" does not match \""+exists+"\" check!")
                 children = False
                 for child in node:
@@ -3555,7 +3603,7 @@ def handle(context, node, tier, parents):
             else:
               exists = ensure(exists.text).strip()+ensure(call[1]).strip()
               exists = exists.strip()
-              if (os.path.exists(exists)):
+              if (existence(exists)):
                 context.log(node, str(id)+" does match \""+exists+"\" check for else case!")
                 return null
           else:
