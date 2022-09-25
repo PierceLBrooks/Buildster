@@ -3300,6 +3300,8 @@ class Context(Element):
         self.data["BUILDSTER_OS"] = "Windows"
     if not ("BUILDSTER_VARIANT" in self.data):
       self.data["BUILDSTER_VARIANT"] = self.variant
+    if not ("BUILDSTER_ARCH" in self.data):
+      self.data["BUILDSTER_ARCH"] = platform.machine().lower()
     
   def build(self, owner, variant):
     self.tier = None
