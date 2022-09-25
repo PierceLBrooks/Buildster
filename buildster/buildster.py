@@ -130,59 +130,71 @@ def move(source, destination, context = None, rename = None):
   dst = ""
   extension = None
   index = -1
-  if not (os.path.exists(source)):
-    if not (context == None):
-      if not (context.work == None):
-        if ("*" in source):
-          if (os.path.isdir(context.work)):
-            for root, folders, files in os.walk(context.work):
-              for name in files:
-                if (fnmatch.fnmatch(name, os.path.basename(source))):
-                  src = os.path.join(root, name)
-                  break
-        else:
-          src = os.path.join(context.work, source)
-        if not (os.path.exists(src)):
-          src = ""
-  if (len(src) == 0):
-    src += source
-  for i in range(len(src)):
-    if (src[i:(i+1)] == "."):
-      index = i
-  if (index > -1):
-    extension = src[index:]
-  if (os.path.exists(destination)):
-    if (os.path.isdir(destination)):
-      if (rename == None):
-        dst += os.path.join(destination, os.path.basename(source))
-      else:
-        dst += os.path.join(destination, rename)
-        if not (extension == None):
-          if not (dst.endswith(extension)):
-            dst += extension
-    else:
-      return False
-  else:
-    if not (os.path.isdir(os.path.dirname(destination))):
-      if (contains(wd(), os.path.dirname(destination))):
-        os.makedirs(os.path.dirname(destination))
+  try:
+    if not (os.path.exists(source)):
+      if not (context == None):
+        if not (context.work == None):
+          if ("*" in source):
+            if (os.path.isdir(context.work)):
+              for root, folders, files in os.walk(context.work):
+                for name in files:
+                  if (fnmatch.fnmatch(name, os.path.basename(source))):
+                    src = os.path.join(root, name)
+                    break
+          else:
+            src = os.path.join(context.work, source)
+          if not (os.path.exists(src)):
+            src = ""
+    if (len(src) == 0):
+      src += source
+    for i in range(len(src)):
+      if (src[i:(i+1)] == "."):
+        index = i
+    if (index > -1):
+      extension = src[index:]
+    if (os.path.exists(destination)):
+      if (os.path.isdir(destination)):
         if (rename == None):
-          dst = destination
+          dst += os.path.join(destination, os.path.basename(source))
         else:
-          os.makedirs(destination)
-          dst = os.path.join(destination, rename)
+          dst += os.path.join(destination, rename)
           if not (extension == None):
             if not (dst.endswith(extension)):
               dst += extension
-  if (len(dst) == 0):
-    dst += destination
-  if not (context == None):
-    context.log(None, "\""+src+"\" -> \""+dst+"\"")
-  try:
-    shutil.copyfile(src.replace("\\", "/"), dst.replace("\\", "/"))
+      else:
+        success = False
+    else:
+      if not (os.path.isdir(os.path.dirname(destination))):
+        if (contains(wd(), os.path.dirname(destination))):
+          os.makedirs(os.path.dirname(destination))
+          if (rename == None):
+            dst = destination
+          else:
+            os.makedirs(destination)
+            dst = os.path.join(destination, rename)
+            if not (extension == None):
+              if not (dst.endswith(extension)):
+                dst += extension
+    if (success):
+      if (len(dst) == 0):
+        dst += destination
   except Exception as exception:
     logging.error(traceback.format_exc())
     success = False
+  if (success):
+    try:
+      src = src.replace("\\", "/")
+      dst = dst.replace("\\", "/")
+      shutil.copyfile(src, dst)
+    except Exception as exception:
+      logging.error(traceback.format_exc())
+      success = False
+  if (success):
+    status = os.stat(src)
+    chmod(dst, status.st_mode)
+  else:
+    if not (context == None):
+      context.log(None, "\""+src+"\" -> \""+dst+"\"")
   return success
   
 def unzip(source, destination):
@@ -684,26 +696,60 @@ class Copier(Performer):
     rename = None
     if not (self.rename == None):
       rename = self.rename.getContent()
-    if ("*" in str(os.path.basename(source))):
-      if (os.path.isdir(os.path.dirname(source))):
-        for root, folders, files in os.walk(os.path.dirname(source)):
+    if ((os.path.isdir(source)) or ((os.path.isdir(os.path.join(str(context.work), source))) and not (context.work == None))):
+      if not (os.path.isdir(source)):
+        source = os.path.join(context.work, source)
+      check = os.path.isdir(destination)
+      names = []
+      for root, folders, files in os.walk(source):
+        for name in folders:
+          names.append(os.path.join(root, name))
+        for name in files:
+          temp = None
+          if (rename == None):
+            if not (check):
+              temp = os.path.join(destination, name)
+            else:
+              temp = os.path.join(destination, os.path.basename(os.path.abspath(source)), name)
+          else:
+            temp = os.path.join(destination, rename, name)
+          if not (move(os.path.join(root, name), temp, context, rename)):
+            return False
+        break
+      for folder in names:
+        for root, folders, files in os.walk(folder):
           for name in files:
-            if (fnmatch.fnmatch(name, str(os.path.basename(source)))):
-              temp = None
-              if (rename == None):
-                temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), name)
+            temp = None
+            if (rename == None):
+              if not (check):
+                temp = os.path.join(destination, os.path.basename(folder), os.path.relpath(root, folder), name)
               else:
-                temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), rename)
-              context.log(None, "Copying from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"...")
-              if not (move(os.path.join(root, name), temp, context, rename)):
-                return False
-              context.log(None, "Copied from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"!")
+                temp = os.path.join(destination, os.path.basename(os.path.abspath(source)), os.path.basename(folder), os.path.relpath(root, folder), name)
+            else:
+              temp = os.path.join(destination, rename, os.path.relpath(root, folder), name)
+            if not (move(os.path.join(root, name), temp, context, rename)):
+              return False
+    else:
+      if ("*" in str(os.path.basename(source))):
+        if (os.path.isdir(os.path.dirname(source))):
+          for root, folders, files in os.walk(os.path.dirname(source)):
+            for name in files:
+              if (fnmatch.fnmatch(name, str(os.path.basename(source)))):
+                temp = None
+                if (rename == None):
+                  temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), name)
+                else:
+                  temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), rename)
+                context.log(None, "Copying from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"...")
+                if not (move(os.path.join(root, name), temp, context, rename)):
+                  return False
+                context.log(None, "Copied from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"!")
+        else:
+          if not (move(source, destination, context, rename)):
+            return False
       else:
         if not (move(source, destination, context, rename)):
           return False
-    else:
-      if not (move(source, destination, context, rename)):
-        return False
     context.log(None, "Copied from \""+self.source.getContent()+"\" to \""+self.destination.getContent()+"\"!")
     return True
     
