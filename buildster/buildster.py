@@ -3817,12 +3817,12 @@ def handle(context, node, tier, parents):
         result = False
         break
       if (child.tag.lower() in context.conditionals):
-        output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+        output.append([ensure(call[1]).strip(), ensure(child.tail)])
       elif ((child.tag.lower() in context.nonconditionals) or (child.tag.lower() in context.substitutes)):
         if (child.tag.lower() in context.substitutes):
           output.append([ensure(call[1]), ensure(child.tail)])
         else:
-          output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+          output.append([ensure(call[1]).strip(), ensure(child.tail)])
       for key in call[2]:
         value = call[2][key]
         if not (value == None):
