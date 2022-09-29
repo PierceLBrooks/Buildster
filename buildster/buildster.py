@@ -1205,11 +1205,14 @@ class DefinitionList(List):
     return super(DefinitionList, self).add(definition)
     
 class Link(Object):
-  def __init__(self, string = None):
+  def __init__(self, string = None, linkage = None):
     super(Link, self).__init__()
     self.string = None
     if (type(string) == String):
       self.string = string
+    self.linkage = None
+    if (type(linkage) == String):
+      self.linkage = linkage
       
   def getContent(self):
     return self.string.getContent()
@@ -2397,6 +2400,9 @@ class Target(Build):
       if not (self.links == None):
         for i in range(len(self.links.content)):
           link = self.links.content[i].getContent().strip()
+          linkage = self.links.content[i].linkage
+          if not (linkage == None):
+            linkage = linkage.getContent().strip()
           if ("*" in link):
             for j in range(len(links)):
               for root, folders, files in os.walk(links[j]):
@@ -2406,6 +2412,14 @@ class Target(Build):
                       if ("visual studio" in str(generator).lower()):
                         if not ((owner.getContext().libraries[k] == "dll") or (owner.getContext().libraries[k] == "lib")):
                           continue
+                      if not (linkage == None):
+                        if (linkage == "static"):
+                          if not (owner.getContext().libraries[k] in owner.getContext().statics):
+                            continue
+                        else:
+                          if (linkage == "shared"):
+                            if not (owner.getContext().libraries[k] in owner.getContext().shares):
+                              continue
                       if (name.endswith("."+owner.getContext().libraries[k])):
                         write(descriptor, "link_libraries(\""+name+"\")")
                         break
@@ -3066,6 +3080,17 @@ class Context(Element):
     self.libraries.append("so")
     self.libraries.append("jar")
     
+    self.statics = []
+    
+    self.statics.append("a")
+    self.statics.append("lib")
+    
+    self.shares = []
+    
+    self.shares.append("dll")
+    self.shares.append("dylib")
+    self.shares.append("so")
+    
     self.extensions = self.headers+self.sources+self.scripts+self.libraries+self.extensions
     
     self.substitutes = []
@@ -3355,6 +3380,7 @@ class Context(Element):
     nodeAttributes["export"].append(["type", False])
     nodeAttributes["target"].append(["type", False])
     nodeAttributes["target"].append(["linkage", True])
+    nodeAttributes["link"].append(["linkage", True])
     nodeAttributes["pre"].append(["timing", True])
     nodeAttributes["post"].append(["timing", True])
     nodeAttributes["search"].append(["type", False])
@@ -4105,10 +4131,6 @@ def handle(context, node, tier, parents):
         output = ensure(node.text)+flatten(output).strip()
         element = Import()
         element.label = Label(String(output.strip()))
-      elif (tag == "link"):
-        output = ensure(node.text)+flatten(output).strip()
-        element = Link()
-        element.string = String(output.strip())
       elif (tag == "label"):
         output = ensure(node.text)+flatten(output).strip()
         element = Label()
@@ -4535,6 +4557,12 @@ def handle(context, node, tier, parents):
       if (tag == "data"):
         output = ensure(context.get(node.attrib["id"])).strip()
         context.log(node, output+"\n")
+      elif (tag == "link"):
+        output = ensure(node.text)+flatten(output).strip()
+        element = Link()
+        element.string = String(output.strip())
+        if ("linkage" in node.attrib):
+          element.linkage = String(node.attrib["linkage"].strip())
       elif (tag == "pre"):
         for key in elements:
           for value in elements[key]:
