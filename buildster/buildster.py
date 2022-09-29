@@ -4,32 +4,45 @@
 import re
 import os
 import ast
+import ssl
 import sys
 import copy
 import json
 import stat
-import wget
 import shlex
 import shutil
 import base64
+import urllib
 import fnmatch
 import pathlib
 import zipfile
 import tarfile
 import inspect
 import logging
+import pyunpack
 import platform
 import importlib
 import traceback
 import subprocess
 import xml.etree.ElementTree as xml_tree
+from urllib.request import urlretrieve
 from datetime import datetime
+
+def retrieve(url, path):
+  success = True
+  try:
+    urlretrieve(url, path)
+  except Exception as exception:
+    logging.error(traceback.format_exc())
+    success = False
+  return success
 
 def chmod(left, right):
   success = True
   try:
     os.chmod(left, right)
-  except:
+  except Exception as exception:
+    logging.error(traceback.format_exc())
     success = False
   return success
 
@@ -826,6 +839,13 @@ class Extractor(Performer):
       if not (untar(content, os.path.join(path, filename))):
         return False
     else:
+      try:
+        os.makedirs(os.path.join(path, filename))
+        pyunpack.Archive(content).extractall(os.path.join(path, filename))
+      except Exception as exception:
+        logging.error(traceback.format_exc())
+        index = -1
+    if (index < 0):
       return False
     context.log(None, "Extracted \""+self.toString(self.path)+"\"!")
     return True
@@ -981,6 +1001,34 @@ class ArgumentList(List):
       return False
     return super(ArgumentList, self).add(argument)
     
+class Component(Element):
+  def __init__(self, string = None):
+    super(Component, self).__init__()
+    self.string = None
+    if (type(string) == String):
+      self.string = string
+      
+  def build(self, owner, variant):
+    return True
+    
+  def getContent(self):
+    return self.string.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.string)+">"
+    
+class ComponentList(List):
+  def __init__(self):
+    super(ComponentList, self).__init__()
+    
+  def build(self, owner, variant):
+    return True
+        
+  def addComponent(self, component):
+    if not (isinstance(component, Component)):
+      return False
+    return super(ComponentList, self).add(component)
+    
 class Hint(Element):
   def __init__(self, string = None):
     super(Hint, self).__init__()
@@ -1041,7 +1089,7 @@ class VariableList(List):
     return super(VariableList, self).add(variable)
     
 class Package(Element):
-  def __init__(self, label = None, exports = None, hints = None, variables = None):
+  def __init__(self, label = None, exports = None, hints = None, variables = None, components = None):
     super(Package, self).__init__()
     self.label = Label(String(""))
     if (type(label) == Label):
@@ -1055,6 +1103,9 @@ class Package(Element):
     self.variables = None
     if (type(variables) == VariableList):
       self.variables = variables
+    self.components = None
+    if (type(components) == ComponentList):
+      self.components = components
       
   def build(self, owner, variant):
     return True
@@ -1063,7 +1114,7 @@ class Package(Element):
     return self.label.getContent()
     
   def __str__(self):
-    return "<"+self.toString(self.label)+", "+self.toString(self.exports)+", "+self.toString(self.hints)+", "+self.toString(self.variables)+">"
+    return "<"+self.toString(self.label)+", "+self.toString(self.exports)+", "+self.toString(self.hints)+", "+self.toString(self.variables)+", "+self.toString(self.components)+">"
     
 class PackageList(List):
   def __init__(self):
@@ -2000,23 +2051,8 @@ class WGetDependency(RemoteDependency):
         os.makedirs(path)
     success = True
     if not (os.path.exists(os.path.join(path, content))):
-      try:
-        filename = wget.download(self.url.getContent(), out=path)
-        if (filename == None):
-          success = False
-        else:
-          if not (os.path.exists(os.path.join(path, filename))):
-            success = False
-          else:
-            if not (move(os.path.join(path, filename), os.path.join(path, content))):
-              success = False
-            else:
-              if not (os.path.exists(os.path.join(path, content))):
-                success = False
-      except:
-        success = False
-    if not (success):
-      return False
+      if not (retrieve(self.url.getContent(), os.path.join(path, content))):
+        return False
     success = super(WGetDependency, self).build(owner, variant)
     if not (success):
       return False
@@ -2334,6 +2370,20 @@ class Target(Build):
           continue
         hints = None
         variables = None
+        components = None
+        if not (package.components == None):
+          components = ""
+          for j in range(len(package.components.content)):
+            component = package.components.content[j]
+            if (component == None):
+              continue
+            component = component.getContent()
+            if (len(component.strip()) == 0):
+              continue
+            components += component
+            components += " "
+          if (len(components.strip()) == 0):
+            components = None
         if not (package.hints == None):
           hints = ""
           for j in range(len(package.hints.content)):
@@ -2343,8 +2393,10 @@ class Target(Build):
             if (hint == None):
               continue
             hint = hint.getContent()
+            if (len(hint.strip()) == 0):
+              continue
             hints += hint
-          if (len(hints) == 0):
+          if (len(hints.strip()) == 0):
             hints = None
         if not (package.variables == None):
           variables = []
@@ -2359,7 +2411,10 @@ class Target(Build):
           if (len(variables) == 0):
             variables = None
         if (hints == None):
-          write(descriptor, "find_package("+package.getContent()+" REQUIRED)")
+          if (components == None):
+            write(descriptor, "find_package("+package.getContent()+" REQUIRED)")
+          else:
+            write(descriptor, "find_package("+package.getContent()+" COMPONENTS "+components.strip()+" REQUIRED)")
         else:
           write(descriptor, "pkg_search_module("+package.getContent()+" REQUIRED "+hints+")")
         if not (variables == None):
@@ -3093,6 +3148,8 @@ class Context(Element):
     nodeTags.append("package")
     nodeTags.append("modules")
     nodeTags.append("module")
+    nodeTags.append("components")
+    nodeTags.append("component")
     nodeTags.append("hints")
     nodeTags.append("hint")
     nodeTags.append("python")
@@ -3241,6 +3298,8 @@ class Context(Element):
     nodeParents["module"].append("modules")
     nodeParents["hints"].append("package")
     nodeParents["hint"].append("hints")
+    nodeParents["components"].append("package")
+    nodeParents["component"].append("components")
     
     nodeAttributes["json"].append(["key", False])
     nodeAttributes["data"].append(["id", False])
@@ -3755,6 +3814,10 @@ def handle(context, node, tier, parents):
       element = ModuleList()
     elif (tag == "module"):
       element = Module()
+    elif (tag == "components"):
+      element = ComponentList()
+    elif (tag == "component"):
+      element = Component()
     elif (tag == "hints"):
       element = HintList()
     elif (tag == "hint"):
@@ -3817,12 +3880,12 @@ def handle(context, node, tier, parents):
         result = False
         break
       if (child.tag.lower() in context.conditionals):
-        output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+        output.append([ensure(call[1]).strip(), ensure(child.tail)])
       elif ((child.tag.lower() in context.nonconditionals) or (child.tag.lower() in context.substitutes)):
         if (child.tag.lower() in context.substitutes):
           output.append([ensure(call[1]), ensure(child.tail)])
         else:
-          output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+          output.append([ensure(call[1]).strip(), ensure(child.tail)])
       for key in call[2]:
         value = call[2][key]
         if not (value == None):
@@ -4027,6 +4090,10 @@ def handle(context, node, tier, parents):
         output = ensure(node.text)+flatten(output).strip()
         element = Hint()
         element.string = String(output.strip())
+      elif (tag == "component"):
+        output = ensure(node.text)+flatten(output).strip()
+        element = Component()
+        element.string = String(output.strip())
       elif (tag == "variable"):
         if ("key" in elements):
           for key in elements["key"]:
@@ -4093,6 +4160,11 @@ def handle(context, node, tier, parents):
             element.hints = hints
             break
           elements["hints"] = None
+        if ("components" in elements):
+          for components in elements["components"]:
+            element.components = components
+            break
+          elements["hints"] = None
         if ("variables" in elements):
           for variables in elements["variables"]:
             element.variables = variables
@@ -4107,6 +4179,11 @@ def handle(context, node, tier, parents):
           for hint in elements["hint"]:
             element.addHint(hint)
           elements["hint"] = None
+      elif (tag == "components"):
+        if ("component" in elements):
+          for component in elements["component"]:
+            element.addComponent(component)
+          elements["component"] = None
       elif (tag == "variables"):
         if ("variable" in elements):
           for variable in elements["variable"]:
@@ -4695,6 +4772,7 @@ def run(target, data, environment):
   return True
 
 def main(environment = None):
+  ssl._create_default_https_context = ssl._create_unverified_context
   result = 0
   try:
     arguments = sys.argv
