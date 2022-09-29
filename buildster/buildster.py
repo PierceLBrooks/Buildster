@@ -94,6 +94,8 @@ def read(path):
 
 def flatten(output, prefix = "", suffix = ""):
   final = ""
+  if (output == None):
+    return final
   for i in range(len(output)):
     temp = output[i]
     final += prefix
@@ -423,6 +425,15 @@ class Element(Object):
   def distribute(self, owner, distribution, variant):
     return True
     
+  def move(self, source, destination):
+    if (os.path.exists(destination)):
+      if (os.path.getmtime(destination) >= os.path.getmtime(source)):
+        return True
+      os.unlink(destination)
+    if not (move(source, destination)):
+      return False
+    return True
+    
   def getParent(self):
     return self.parent
     
@@ -703,12 +714,12 @@ class Copier(Performer):
   def perform(self, context):
     if ((self.source == None) or (self.destination == None)):
       return False
-    context.log(None, "Copying from \""+self.source.getContent()+"\" to \""+self.destination.getContent()+"\"...")
-    source = self.source.getContent()
-    destination = self.destination.getContent()
+    context.log(None, "Copying from \""+self.source.getContent().strip()+"\" to \""+self.destination.getContent().strip()+"\"...")
+    source = self.source.getContent().strip()
+    destination = self.destination.getContent().strip()
     rename = None
     if not (self.rename == None):
-      rename = self.rename.getContent()
+      rename = self.rename.getContent().strip()
     if ((os.path.isdir(source)) or ((os.path.isdir(os.path.join(str(context.work), source))) and not (context.work == None))):
       if not (os.path.isdir(source)):
         source = os.path.join(context.work, source)
@@ -726,6 +737,8 @@ class Copier(Performer):
               temp = os.path.join(destination, os.path.basename(os.path.abspath(source)), name)
           else:
             temp = os.path.join(destination, rename, name)
+          if (os.path.exists(temp)):
+            continue
           if not (move(os.path.join(root, name), temp, context, rename)):
             return False
         break
@@ -739,7 +752,9 @@ class Copier(Performer):
               else:
                 temp = os.path.join(destination, os.path.basename(os.path.abspath(source)), os.path.basename(folder), os.path.relpath(root, folder), name)
             else:
-              temp = os.path.join(destination, rename, os.path.relpath(root, folder), name)
+              temp = os.path.join(destination, rename, os.path.basename(folder), os.path.relpath(root, folder), name)
+            if (os.path.exists(temp)):
+              continue
             if not (move(os.path.join(root, name), temp, context, rename)):
               return False
     else:
@@ -753,6 +768,8 @@ class Copier(Performer):
                   temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), name)
                 else:
                   temp = os.path.join(destination, os.path.relpath(root, os.path.dirname(source)), rename)
+                if (os.path.exists(temp)):
+                  continue
                 context.log(None, "Copying from \""+str(os.path.join(root, name))+"\" to \""+str(temp)+"\"...")
                 if not (move(os.path.join(root, name), temp, context, rename)):
                   return False
@@ -1709,9 +1726,8 @@ class Dependency(Build):
             for name in files:
               if (context.exclude(name)):
                 continue
-              if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
-                if not (move(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
-                  return False
+              if not (self.move(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
+                return False
         elif (os.path.isfile(export[1])):
           if not (os.path.exists(os.path.join(distribution, variant.lower(), os.path.basename(export[1])))):
             if not (move(export[1].replace("\\", "/"), os.path.join(distribution, variant.lower(), os.path.basename(export[1])).replace("\\", "/"))):
@@ -1721,9 +1737,8 @@ class Dependency(Build):
               for name in files:
                 if (context.exclude(name)):
                   continue
-                if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
-                  if not (move(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
-                    return False
+                if not (self.move(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
+                  return False
       elif (export[0] == "all"):
         if (os.path.isdir(export[1])):
           if (os.path.isdir(os.path.join(export[1], "bin"))):
@@ -1731,17 +1746,15 @@ class Dependency(Build):
               for name in files:
                 if (context.exclude(name)):
                   continue
-                if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
-                  if not (move(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
-                    return False
+                if not (self.move(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
+                  return False
           if (os.path.isdir(os.path.join(export[1], "lib"))):
             for root, folders, files in os.walk(os.path.join(export[1], "lib")):
               for name in files:
                 if (context.exclude(name)):
                   continue
-                if not (os.path.exists(os.path.join(distribution, variant.lower(), name))):
-                  if not (move(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
-                    return False
+                if not (self.move(os.path.join(root, name).replace("\\", "/"), os.path.join(distribution, variant.lower(), name).replace("\\", "/"))):
+                  return False
     return True
     
   def getPath(self, owner, variant, purpose):
@@ -1879,7 +1892,7 @@ class LocalDependency(Dependency):
       return False
     if (self.instruction == None):
       return False
-    success = self.instruction.build(owner, path, self.subpath.getContent(), installation, self.importsContent[variant], variant)
+    success = self.instruction.build(owner, path, self.subpath.getContent(), installation, self.importsContent, variant)
     if not (success):
       return False
     success = self.instruction.install(owner, path, self.subpath.getContent(), installation, variant)
@@ -2172,6 +2185,14 @@ class Target(Build):
     definitions = []
     modules = []
     arguments = []
+    generator = None
+    architecture = None
+    if (self.generator == None):
+      generator = self.getGenerator(owner)
+    else:
+      generator = self.generator.getContent().strip()
+      if not (self.generator.architecture == None):
+        architecture = self.generator.architecture.getContent().strip()
     for i in range(len(owner.getDependencies().getContent())):
       dependency = owner.getDependencies().getContent()[i]
       if not (dependency == self):
@@ -2244,8 +2265,11 @@ class Target(Build):
             if not (context.project.directory == None):
               cmake_modules = os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), context.project.cmake_modules.getContent()).replace("\\", "/")
               if (os.path.isdir(cmake_modules)):
-                cmake_modules = relativize(base, cmake_modules).replace("\\", "/")
-                write(descriptor, "set(CMAKE_MODULE_PATH \"${CMAKE_CURRENT_LIST_DIR}/"+cmake_modules+"\")")
+                if (contains(wd(), cmake_modules)):
+                  cmake_modules = "${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, cmake_modules).replace("\\", "/")
+                else:
+                  cmake_modules = cmake_modules.replace("\\", "/")
+                write(descriptor, "set(CMAKE_MODULE_PATH \""+cmake_modules+"\")")
       write(descriptor, "project(\""+self.label.getContent()+"Project\")")
       write(descriptor, "set(BUILDSTER_HEADERS )")
       write(descriptor, "set(BUILDSTER_FILES )")
@@ -2275,10 +2299,14 @@ class Target(Build):
             if (len(export.key.getContent()) == 0):
               continue
             write(descriptor, "set("+export.key.getContent()+" )")
-        if (os.path.isfile(module.getContent())):
-          write(descriptor, "include(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, module.getContent()).replace("\\", "/")+"\")")
+        if (os.path.isfile(module.getContent().strip())):
+          if (contains(wd(), module.getContent().strip())):
+            write(descriptor, "include(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, module.getContent().strip()).replace("\\", "/")+"\")")
+          else:
+            write(descriptor, "include(\""+module.getContent().strip().replace("\\", "/")+"\")")
+
         else:
-          write(descriptor, "include("+module.getContent()+")")
+          write(descriptor, "include("+module.getContent().strip()+")")
         if not (module.exports == None):
           for j in range(len(module.exports.content)):
             export = module.exports.content[j]
@@ -2290,22 +2318,28 @@ class Target(Build):
               continue
             if (export.export.getContent() == "headers"):
               if not (export.value == None):
-                if not (len(export.value.getContent()) == 0):
-                  if (os.path.isdir(export.value.getContent())):
-                    write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, export.value.getContent()).replace("\\", "/")+"\")")
+                if not (len(export.value.getContent().strip()) == 0):
+                  if (os.path.isdir(export.value.getContent().strip())):
+                    if (contains(wd(), export.value.getContent().strip())):
+                      write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, export.value.getContent().strip()).replace("\\", "/")+"\")")
+                    else:
+                      write(descriptor, "include_directories(\""+export.value.getContent().strip().replace("\\", "/")+"\")")
                   else:
-                    write(descriptor, "include_directories("+export.value.getContent()+")")
+                    write(descriptor, "include_directories("+export.value.getContent().strip()+")")
                 else:
                   write(descriptor, "include_directories(${"+export.key.getContent()+"})")
               else:
                 write(descriptor, "include_directories(${"+export.key.getContent()+"})")
             elif (export.export.getContent() == "libraries"):
               if not (export.value == None):
-                if not (len(export.value.getContent()) == 0):
-                  if (os.path.isdir(export.value.getContent())):
-                    write(descriptor, "link_libraries(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, export.value.getContent()).replace("\\", "/")+"\")")
+                if not (len(export.value.getContent().strip()) == 0):
+                  if (os.path.isdir(export.value.getContent().strip())):
+                    if (contains(wd(), export.value.getContent().strip())):
+                      write(descriptor, "link_libraries(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, export.value.getContent().strip()).replace("\\", "/")+"\")")
+                    else:
+                      write(descriptor, "link_libraries(\""+export.value.getContent().strip().replace("\\", "/")+"\")")
                   else:
-                    write(descriptor, "link_libraries("+export.value.getContent()+")")
+                    write(descriptor, "link_libraries("+export.value.getContent().strip()+")")
                 else:
                   write(descriptor, "link_libraries(${"+export.key.getContent()+"})")
               else:
@@ -2319,14 +2353,20 @@ class Target(Build):
         write(descriptor, "add_definitions(-D"+definition+")")
       for i in range(len(includes)):
         include = includes[i]
-        write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, include.replace("\\", "/"))+"\")")
+        if (contains(wd(), include)):
+          write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, include.replace("\\", "/"))+"\")")
+        else:
+          write(descriptor, "include_directories(\""+include.replace("\\", "/")+"\")")
       for export in exports:
         if (exports[export][1] == "headers"):
           headers = exports[export][0].replace("\\", "/")
           if not (os.path.isdir(headers)):
             if (contains(wd(), headers)):
               os.makedirs(headers)
-          write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, headers.replace("\\", "/"))+"\")")
+          if (contains(wd(), headers)):
+            write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, headers.replace("\\", "/"))+"\")")
+          else:
+            write(descriptor, "include_directories(\""+headers.replace("\\", "/")+"\")")
         elif (exports[export][1] == "libraries"):
           libraries = exports[export][0].replace("\\", "/")
           if not (os.path.isdir(libraries)):
@@ -2337,7 +2377,10 @@ class Target(Build):
               for i in range(len(owner.getContext().libraries)):
                 if (name.endswith("."+owner.getContext().libraries[i])):
                   links.append(str(root).replace("\\", "/"))
-                  write(descriptor, "link_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, links[len(links)-1])+"\")")
+                  if (contains(wd(), links[len(links)-1])):
+                    write(descriptor, "link_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, links[len(links)-1])+"\")")
+                  else:
+                    write(descriptor, "link_directories(\""+links[len(links)-1]+"\")")
                   name = None
                   break
               if (name == None):
@@ -2347,7 +2390,10 @@ class Target(Build):
       for i in range(len(linkages)):
         linkage = linkages[i]
         links.append(linkage.replace("\\", "/"))
-        write(descriptor, "link_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, links[len(links)-1])+"\")")
+        if (contains(wd(), links[len(links)-1])):
+          write(descriptor, "link_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, links[len(links)-1])+"\")")
+        else:
+          write(descriptor, "link_directories(\""+links[len(links)-1]+"\")")
       if not (self.links == None):
         for i in range(len(self.links.content)):
           link = self.links.content[i].getContent().strip()
@@ -2357,6 +2403,9 @@ class Target(Build):
                 for name in files:
                   if (fnmatch.fnmatch(name, link)):
                     for k in range(len(owner.getContext().libraries)):
+                      if ("visual studio" in str(generator).lower()):
+                        if not ((owner.getContext().libraries[k] == "dll") or (owner.getContext().libraries[k] == "lib")):
+                          continue
                       if (name.endswith("."+owner.getContext().libraries[k])):
                         write(descriptor, "link_libraries(\""+name+"\")")
                         break
@@ -2472,14 +2521,6 @@ class Target(Build):
       descriptor.close()
     else:
       path = self.getPath(owner, variant, None)
-    generator = None
-    architecture = None
-    if (self.generator == None):
-      generator = self.getGenerator(owner)
-    else:
-      generator = self.generator.getContent()
-      if not (self.generator.architecture == None):
-        architecture = self.generator.architecture.getContent()
     if (generator == None):
       context.log(self.node, "Generator failure!")
       return False
@@ -2532,7 +2573,7 @@ class Target(Build):
       return False
     source = installation.replace("\\", "/")
     destination = os.path.join(distribution, variant.lower(), os.path.basename(installation)).replace("\\", "/")
-    if not (move(source, destination)):
+    if not (self.move(source, destination)):
       return False
     if not (platform.system() == "Linux"):
       return True
@@ -2856,9 +2897,7 @@ class Project(Element):
   def distribute(self, owner, distribution, variant):
     self.owner = owner
     path = os.path.join(distribution, variant.lower()).replace("\\", "/")
-    if (os.path.isdir(path)):
-      shutil.rmtree(path)
-    if (contains(wd(), path)):
+    if not (os.path.isdir(path)):
       os.makedirs(path)
     if not (self.dependencies == None):
       if not (self.dependencies.distribute(self, distribution, variant)):
@@ -3515,11 +3554,13 @@ def handle(context, node, tier, parents):
   parent = parents[len(parents)-1]
   quit = False
   result = True
-  tag = node.tag.lower()
   output = []
   elements = {}
   element = None
   null = [True, "", {}]
+  if (node == None):
+    return null
+  tag = node.tag.lower()
   context.tier = tier
   context.log(node, tag)
   #context.log(node, "NODE_BEGIN\n")
@@ -4389,7 +4430,7 @@ def handle(context, node, tier, parents):
           if not (label == None):
             project = get_parent(parents, "project")
             if not (project == None):
-              temp = handle(context, label, tier, [None])
+              temp = handle(context, label, tier, [dependency])
               output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "dependencies", temp[1], context.variant.lower())).replace("\\", "/")
             else:
               context.report(node, "No \"project\" ancestor for \"label\" node!\n")
@@ -4404,7 +4445,7 @@ def handle(context, node, tier, parents):
             if not (label == None):
               project = get_parent(parents, "project")
               if not (project == None):
-                temp = handle(context, label, tier, [None])
+                temp = handle(context, label, tier, [target])
                 output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "targets", temp[1], context.variant.lower())).replace("\\", "/")
               else:
                 context.report(node, "No \"project\" ancestor for \"label\" node!\n")
@@ -4422,18 +4463,23 @@ def handle(context, node, tier, parents):
       elif (tag == "origin"):
         dependency = get_parent(parents, "dependency")
         if not (dependency == None):
-          label = get_child(dependency, "label")
-          if not (label == None):
-            project = get_parent(parents, "project")
-            if not (project == None):
-              temp = handle(context, label, tier, [None])
-              output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "build", "dependencies", temp[1])).replace("\\", "/")
-            else:
-              context.report(node, "No \"project\" ancestor for \"label\" node!\n")
-              result = False
+          local = get_child(dependency, "local")
+          if not (local == None):
+            temp = handle(context, get_child(local, "path"), tier, [local])
+            output = flatten(temp[1]).strip().replace("\\", "/")
           else:
-            context.report(node, "No \"label\" descendant for \"dependency\" node!\n")
-            result = False
+            label = get_child(dependency, "label")
+            if not (label == None):
+              project = get_parent(parents, "project")
+              if not (project == None):
+                temp = handle(context, label, tier, [dependency])
+                output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "build", "dependencies", temp[1].strip())).replace("\\", "/")
+              else:
+                context.report(node, "No \"project\" ancestor for \"label\" node!\n")
+                result = False
+            else:
+              context.report(node, "No \"label\" descendant for \"dependency\" node!\n")
+              result = False
         else:
           target = get_parent(parents, "target")
           if not (target == None):
@@ -4441,7 +4487,7 @@ def handle(context, node, tier, parents):
             if not (label == None):
               project = get_parent(parents, "project")
               if not (project == None):
-                temp = handle(context, label, tier, [None])
+                temp = handle(context, label, tier, [target])
                 output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], temp[1])).replace("\\", "/")
               else:
                 context.report(node, "No \"project\" ancestor for \"label\" node!\n")
