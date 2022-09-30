@@ -2543,14 +2543,12 @@ class Target(Build):
                   project[i] = None
                   break
               else:
-                print("lol "+exception)
                 if not (os.path.exists(exception)):
                   continue
                 if not (contains(self.getPath(owner, None, None), exception)):
                   continue
                 left = relativize(base, exception.replace("\\", "/"))
                 right = relativize(base, project[i].replace("\\", "/"))
-                print("hi "+left+" "+right)
                 if (left == right):
                   project[i] = None
                   break
