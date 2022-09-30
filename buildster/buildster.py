@@ -32,7 +32,7 @@ def retrieve(url, path):
   success = True
   try:
     urlretrieve(url, path)
-  except Exception as exception:
+  except:
     logging.error(traceback.format_exc())
     success = False
   return success
@@ -41,7 +41,7 @@ def chmod(left, right):
   success = True
   try:
     os.chmod(left, right)
-  except Exception as exception:
+  except:
     logging.error(traceback.format_exc())
     success = False
   return success
@@ -193,7 +193,7 @@ def move(source, destination, context = None, rename = None):
     if (success):
       if (len(dst) == 0):
         dst += destination
-  except Exception as exception:
+  except:
     logging.error(traceback.format_exc())
     success = False
   if (success):
@@ -201,7 +201,7 @@ def move(source, destination, context = None, rename = None):
       src = src.replace("\\", "/")
       dst = dst.replace("\\", "/")
       shutil.copyfile(src, dst)
-    except Exception as exception:
+    except:
       logging.error(traceback.format_exc())
       success = False
   if (success):
@@ -217,7 +217,7 @@ def unzip(source, destination):
   try:
     with zipfile.ZipFile(source) as zf:
       zf.extractall(destination)
-  except Exception as exception:
+  except:
     logging.error(traceback.format_exc())
     success = False
   return success
@@ -228,7 +228,7 @@ def untar(source, destination):
     with open(source, "rb") as handle:
       with tarfile.open(fileobj=handle) as tf:
         tf.extractall(destination)
-  except Exception as exception:
+  except:
     logging.error(traceback.format_exc())
     success = False
   return success
@@ -859,7 +859,7 @@ class Extractor(Performer):
       try:
         os.makedirs(os.path.join(path, filename))
         pyunpack.Archive(content).extractall(os.path.join(path, filename))
-      except Exception as exception:
+      except:
         logging.error(traceback.format_exc())
         index = -1
     if (index < 0):
@@ -1012,11 +1012,39 @@ class ArgumentList(List):
     
   def build(self, owner, variant):
     return True
-        
+    
   def addArgument(self, argument):
     if not (isinstance(argument, Argument)):
       return False
     return super(ArgumentList, self).add(argument)
+    
+class Exception(Element):
+  def __init__(self, string = None):
+    super(Exception, self).__init__()
+    self.string = None
+    if (type(string) == String):
+      self.string = string
+      
+  def build(self, owner, variant):
+    return True
+    
+  def getContent(self):
+    return self.string.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.string)+">"
+    
+class ExceptionList(List):
+  def __init__(self):
+    super(ExceptionList, self).__init__()
+    
+  def build(self, owner, variant):
+    return True
+    
+  def addException(self, exception):
+    if not (isinstance(exception, Exception)):
+      return False
+    return super(ExceptionList, self).add(exception)
     
 class Component(Element):
   def __init__(self, string = None):
@@ -1040,7 +1068,7 @@ class ComponentList(List):
     
   def build(self, owner, variant):
     return True
-        
+    
   def addComponent(self, component):
     if not (isinstance(component, Component)):
       return False
@@ -1068,7 +1096,7 @@ class HintList(List):
     
   def build(self, owner, variant):
     return True
-        
+    
   def addHint(self, hint):
     if not (isinstance(hint, Hint)):
       return False
@@ -1099,7 +1127,7 @@ class VariableList(List):
     
   def build(self, owner, variant):
     return True
-        
+    
   def addVariable(self, variable):
     if not (isinstance(variable, Variable)):
       return False
@@ -2109,7 +2137,7 @@ class WGetDependency(RemoteDependency):
     
     
 class Target(Build):
-  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None, modules = None, linkage = None):
+  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None, modules = None, exceptions = None, linkage = None):
     super(Target, self).__init__()
     self.label = None
     self.subpath = None
@@ -2147,6 +2175,9 @@ class Target(Build):
     self.modules = None
     if (type(modules) == ModuleList):
       self.modules = modules
+    self.exceptions = None
+    if (type(exceptions) == ExceptionList):
+      self.exceptions = exceptions
     self.linkage = None
     if (type(linkage) == String):
       self.linkage = linkage
@@ -2258,7 +2289,7 @@ class Target(Build):
     temp = "."
     if not (self.subpath == None):
       temp = self.subpath.getContent()
-    if not ((os.path.join(self.getPath(owner, variant, None), "CMakeLists.txt").replace("\\", "/") in files) or (os.path.join(self.getPath(owner, variant, None), temp, "CMakeLists.txt").replace("\\", "/") in files)):
+    if not (os.path.join(self.getPath(owner, variant, None), temp, "CMakeLists.txt").replace("\\", "/") in files):
       descriptor = open(os.path.join(path, "CMakeLists.txt"), "w")
       base = path
       write(descriptor, "cmake_minimum_required(VERSION 3.12.0 FATAL_ERROR)")
@@ -2504,6 +2535,27 @@ class Target(Build):
       if (len(project) > 0):
         target = str(type(self))
         for i in range(len(project)):
+          if not (self.exceptions == None):
+            for j in range(len(self.exceptions.content)):
+              exception = self.exceptions.content[j].getContent().strip()
+              if ("*" in exception):
+                if (fnmatch.fnmatch(os.path.basename(project[i]), exception)):
+                  project[i] = None
+                  break
+              else:
+                print("lol "+exception)
+                if not (os.path.exists(exception)):
+                  continue
+                if not (contains(self.getPath(owner, None, None), exception)):
+                  continue
+                left = relativize(base, exception.replace("\\", "/"))
+                right = relativize(base, project[i].replace("\\", "/"))
+                print("hi "+left+" "+right)
+                if (left == right):
+                  project[i] = None
+                  break
+          if (project[i] == None):
+            continue
           for j in range(len(owner.getContext().extensions)):
             extension = "."+owner.getContext().extensions[j]
             if (project[i].endswith(extension)):
@@ -2570,7 +2622,14 @@ class Target(Build):
     if (self.subpath == None):
       result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build").replace("\\", "/"), installation, None)
     else:
-      result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, self.subpath.getContent()), os.path.join(path, "build").replace("\\", "/"), installation, None)
+      files = self.getFiles(owner, "CMakeLists\\.txt")
+      temp = "."
+      if not (self.subpath == None):
+        temp = self.subpath.getContent()
+      if not (os.path.join(self.getPath(owner, variant, None), temp, "CMakeLists.txt").replace("\\", "/") in files):
+        result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build").replace("\\", "/"), installation, None)
+      else:
+        result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, self.subpath.getContent()), os.path.join(path, "build").replace("\\", "/"), installation, None)
     owner.getContext().log(self.node, result)
     result = cmake_build(os.path.join(path, "build").replace("\\", "/"), variant)
     owner.getContext().log(self.node, result)
@@ -3216,6 +3275,8 @@ class Context(Element):
     nodeTags.append("component")
     nodeTags.append("hints")
     nodeTags.append("hint")
+    nodeTags.append("exceptions")
+    nodeTags.append("exception")
     nodeTags.append("python")
     nodeTags.append("home")
     nodeTags.append("execute")
@@ -3354,6 +3415,8 @@ class Context(Element):
     nodeParents["post"].append("build")
     nodeParents["pre"].append("target")
     nodeParents["post"].append("target")
+    nodeParents["exceptions"].append("target")
+    nodeParents["exception"].append("exceptions")
     nodeParents["variables"].append("package")
     nodeParents["variable"].append("variables")
     nodeParents["packages"].append("target")
@@ -3889,6 +3952,10 @@ def handle(context, node, tier, parents):
       element = HintList()
     elif (tag == "hint"):
       element = Hint()
+    elif (tag == "exceptions"):
+      element = ExceptionList()
+    elif (tag == "exception"):
+      element = Exception()
     elif (tag == "cmake"):
       element = CmakeBuildInstruction()
     elif (tag == "shells"):
@@ -4149,6 +4216,10 @@ def handle(context, node, tier, parents):
         output = ensure(node.text)+flatten(output).strip()
         element = Argument()
         element.string = String(output.strip())
+      elif (tag == "exception"):
+        output = ensure(node.text)+flatten(output).strip()
+        element = Exception()
+        element.string = String(output.strip())
       elif (tag == "hint"):
         output = ensure(node.text)+flatten(output).strip()
         element = Hint()
@@ -4237,6 +4308,11 @@ def handle(context, node, tier, parents):
         output = ensure(node.text)+flatten(output).strip()
         element = Work()
         element.string = String(output.strip())
+      elif (tag == "exceptions"):
+        if ("exception" in elements):
+          for exception in elements["exception"]:
+            element.addException(exception)
+          elements["exception"] = None
       elif (tag == "hints"):
         if ("hint" in elements):
           for hint in elements["hint"]:
@@ -4667,6 +4743,11 @@ def handle(context, node, tier, parents):
             element.modules = modules
             break
           elements["modules"] = None
+        if ("exceptions" in elements):
+          for exceptions in elements["exceptions"]:
+            element.exceptions = exceptions
+            break
+          elements["exceptions"] = None
         if ("definitions" in elements):
           for definitions in elements["definitions"]:
             element.definitions = definitions
@@ -4863,7 +4944,7 @@ def main(environment = None):
         result = -1
     else:
       result = -2
-  except Exception as exception:
+  except:
     logging.error(traceback.format_exc())
     result = -3
   return result
