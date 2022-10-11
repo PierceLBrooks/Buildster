@@ -25,16 +25,33 @@ import importlib
 import traceback
 import subprocess
 import xml.etree.ElementTree as xml_tree
+from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-def retrieve(url, path):
+def retrieve(context, url, path = None):
   success = True
-  try:
-    urlretrieve(url, path)
-  except:
-    logging.error(traceback.format_exc())
+  if (url == None):
     success = False
+  if (path == None):
+    path = os.getcwd()
+    if not (context == None):
+      if not (context.work == None):
+        path = context.work
+    if not (os.path.isdir(path)):
+      success = False
+    if (success):
+      try:
+        path = os.path.join(path, pathlib.Path(unquote(urlparse(url).path)).name)
+      except:
+        logging.error(traceback.format_exc())
+        success = False
+  if (success):
+    try:
+      urlretrieve(url, path)
+    except:
+      logging.error(traceback.format_exc())
+      success = False
   return success
 
 def chmod(left, right):
@@ -42,7 +59,6 @@ def chmod(left, right):
   try:
     os.chmod(left, right)
   except:
-    logging.error(traceback.format_exc())
     success = False
   return success
 
@@ -585,6 +601,8 @@ class Key(Object):
       self.string = string
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -598,6 +616,8 @@ class Value(Object):
       self.string = string
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -624,6 +644,8 @@ class Content(Object):
       self.string = string
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -794,6 +816,8 @@ class Deleter(Performer):
       self.path = path
       
   def getContent(self):
+    if (self.path == None):
+      return ""
     return self.path.getContent()
     
   def perform(self, context):
@@ -824,6 +848,8 @@ class Extractor(Performer):
       self.path = path
       
   def getContent(self):
+    if (self.path == None):
+      return ""
     return self.path.getContent()
     
   def perform(self, context):
@@ -870,6 +896,33 @@ class Extractor(Performer):
   def __str__(self):
     return "<"+self.toString(self.path)+">"
     
+class Downloader(Performer):
+  def __init__(self, url = None):
+    super(Downloader, self).__init__()
+    self.url = None
+    if (type(url) == URL):
+      self.url = url
+      
+  def getContent(self):
+    if (self.url == None):
+      return ""
+    return self.url.getContent()
+    
+  def perform(self, context):
+    context.log(None, "Downloading \""+self.toString(self.url)+"\"...")
+    if (self.url == None):
+      return False
+    content = self.getContent().strip()
+    if (len(content) == 0):
+      return False
+    if not (retrieve(context, content)):
+       return False
+    context.log(None, "Downloaded \""+self.toString(self.url)+"\"!")
+    return True
+    
+  def __str__(self):
+    return "<"+self.toString(self.url)+">"
+    
 class Branch(Object):
   def __init__(self, string = None):
     super(Branch, self).__init__()
@@ -878,6 +931,8 @@ class Branch(Object):
       self.string = string
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -891,6 +946,8 @@ class Architecture(Object):
       self.string = string
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -907,6 +964,8 @@ class Generator(Object):
       self.architecture = architecture
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -920,6 +979,8 @@ class Path(Object):
       self.string = string
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -933,6 +994,8 @@ class URL(Object):
       self.string = string
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -946,6 +1009,8 @@ class Label(Object):
       self.string = string
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -959,6 +1024,8 @@ class Work(Object):
       self.string = string
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -972,6 +1039,8 @@ class Root(Object):
       self.string = string
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -985,6 +1054,8 @@ class Term(Object):
       self.string = string
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -1001,6 +1072,8 @@ class Argument(Element):
     return True
     
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -1029,6 +1102,8 @@ class Exception(Element):
     return True
     
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -1057,6 +1132,8 @@ class Component(Element):
     return True
     
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -1085,6 +1162,8 @@ class Hint(Element):
     return True
     
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -1243,6 +1322,8 @@ class Link(Object):
       self.linkage = linkage
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -1610,6 +1691,7 @@ class CommandBuildInstruction(BuildInstruction):
     self.deletes = []
     self.writes = []
     self.setters = []
+    self.downloads = []
     
   def build(self, owner, path, subpath, installation, imports, variant):
     mature = False
@@ -1657,6 +1739,14 @@ class CommandBuildInstruction(BuildInstruction):
         if (setter == None):
           continue
         if not (setter.perform(owner.getContext())):
+          return False
+      mature = True
+    if not (len(self.downloads) == 0):
+      for i in range(len(self.downloads)):
+        download = self.downloads[i]
+        if (download == None):
+          continue
+        if not (download.perform(owner.getContext())):
           return False
       mature = True
     if (mature):
@@ -1964,6 +2054,8 @@ class Username(Object):
       self.string = string
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -1977,6 +2069,8 @@ class Password(Object):
       self.string = string
       
   def getContent(self):
+    if (self.string == None):
+      return ""
     return self.string.getContent()
     
   def __str__(self):
@@ -2095,7 +2189,7 @@ class WGetDependency(RemoteDependency):
         os.makedirs(path)
     success = True
     if not (os.path.exists(os.path.join(path, content))):
-      if not (retrieve(self.url.getContent(), os.path.join(path, content))):
+      if not (retrieve(owner.getContext(), self.url.getContent(), os.path.join(path, content))):
         return False
     success = super(WGetDependency, self).build(owner, variant)
     if not (success):
@@ -3251,6 +3345,7 @@ class Context(Element):
     nodeTags.append("command")
     nodeTags.append("write")
     nodeTags.append("extract")
+    nodeTags.append("download")
     nodeTags.append("copy")
     nodeTags.append("rename")
     nodeTags.append("delete")
@@ -3399,6 +3494,7 @@ class Context(Element):
     nodeParents["commands"].append("shell")
     nodeParents["command"].append("commands")
     nodeParents["extract"].append("command")
+    nodeParents["download"].append("command")
     nodeParents["copy"].append("command")
     nodeParents["delete"].append("command")
     nodeParents["write"].append("command")
@@ -3974,6 +4070,8 @@ def handle(context, node, tier, parents):
       element = Deleter()
     elif (tag == "extract"):
       element = Extractor()
+    elif (tag == "download"):
+      element = Downloader()
     elif (tag == "copy"):
       element = Copier()
     elif (tag == "from"):
@@ -4435,6 +4533,10 @@ def handle(context, node, tier, parents):
           for extract in elements["extract"]:
             element.extracts.append(extract)
           elements["extract"] = None
+        if ("download" in elements):
+          for download in elements["download"]:
+            element.downloads.append(download)
+          elements["download"] = None
         if ("copy" in elements):
           for copy in elements["copy"]:
             element.copies.append(copy)
@@ -4481,6 +4583,9 @@ def handle(context, node, tier, parents):
       elif (tag == "extract"):
         output = ensure(node.text)+flatten(output).strip()
         element.path = Path(String(output.strip()))
+      elif (tag == "download"):
+        output = ensure(node.text)+flatten(output).strip()
+        element.url = URL(String(output.strip()))
       elif (tag == "delete"):
         output = ensure(node.text)+flatten(output).strip()
         element.path = Path(String(output.strip()))
