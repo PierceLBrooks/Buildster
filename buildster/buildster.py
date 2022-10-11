@@ -2490,7 +2490,10 @@ class Target(Build):
           headers = exports[export][0].replace("\\", "/")
           if not (os.path.isdir(headers)):
             if (contains(wd(), headers)):
-              os.makedirs(headers)
+              try:
+                os.makedirs(headers)
+              except:
+                pass
           if (contains(wd(), headers)):
             write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, headers.replace("\\", "/"))+"\")")
           else:
@@ -2499,7 +2502,10 @@ class Target(Build):
           libraries = exports[export][0].replace("\\", "/")
           if not (os.path.isdir(libraries)):
             if (contains(wd(), libraries)):
-              os.makedirs(libraries)
+              try:
+                os.makedirs(libraries)
+              except:
+                pass
           for root, folders, files in os.walk(libraries):
             for name in files:
               for i in range(len(owner.getContext().libraries)):
