@@ -24,6 +24,7 @@ import platform
 import importlib
 import traceback
 import subprocess
+import multiprocessing
 import xml.etree.ElementTree as xml_tree
 from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
@@ -376,7 +377,7 @@ def cmake_configure(generator, architecture, arguments, source, path, installati
   os.chdir(cwd)
   return result
   
-def cmake_build(path, variant, environment = None):
+def cmake_build(path, variant, natives, environment = None):
   command = []
   command.append("cmake")
   command.append("--build")
@@ -384,10 +385,16 @@ def cmake_build(path, variant, environment = None):
   if not (variant == None):
     command.append("--config")
     command.append(variant)
+  if not (natives == None):
+    length = len(natives)
+    if (length > 0):
+      command.append("--")
+      for i in range(length):
+        command.append(natives[i])
   result = execute_command(command, environment)
   return result
   
-def cmake_install(path, variant, installation, environment = None):
+def cmake_install(path, variant, installation, natives, environment = None):
   command = []
   if not (platform.system() == "Windows"):
     command.append("sudo")
@@ -399,6 +406,12 @@ def cmake_install(path, variant, installation, environment = None):
     command.append(variant)
   command.append("--target")
   command.append("install")
+  if not (natives == None):
+    length = len(natives)
+    if (length > 0):
+      command.append("--")
+      for i in range(length):
+        command.append(natives[i])
   result = execute_command(command, environment)
   return result
 
@@ -1091,6 +1104,36 @@ class ArgumentList(List):
       return False
     return super(ArgumentList, self).add(argument)
     
+class Native(Element):
+  def __init__(self, string = None):
+    super(Native, self).__init__()
+    self.string = None
+    if (type(string) == String):
+      self.string = string
+      
+  def build(self, owner, variant):
+    return True
+    
+  def getContent(self):
+    if (self.string == None):
+      return ""
+    return self.string.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.string)+">"
+    
+class NativeList(List):
+  def __init__(self):
+    super(NativeList, self).__init__()
+    
+  def build(self, owner, variant):
+    return True
+    
+  def addNative(self, native):
+    if not (isinstance(native, Native)):
+      return False
+    return super(NativeList, self).add(native)
+    
 class Exception(Element):
   def __init__(self, string = None):
     super(Exception, self).__init__()
@@ -1518,7 +1561,7 @@ class PostBuildInstruction(BuildInstruction):
     return string
     
 class CmakeBuildInstruction(BuildInstruction):
-  def __init__(self, arguments = None, generator = None, source = None):
+  def __init__(self, arguments = None, generator = None, source = None, natives = None):
     super(CmakeBuildInstruction, self).__init__(arguments)
     self.generator = None
     if (type(generator) == Generator):
@@ -1526,6 +1569,9 @@ class CmakeBuildInstruction(BuildInstruction):
     self.source = None
     if (type(source) == Path):
       self.source = source
+    self.natives = None
+    if (type(natives) == NativeList):
+      self.natives = natives
       
   def build(self, owner, path, subpath, installation, imports, variant):
     if (self.generator == None):
@@ -1568,16 +1614,25 @@ class CmakeBuildInstruction(BuildInstruction):
     return True
 
   def buildVariant(self, owner, arguments, cmake, installation, variant):
+    natives = None
     generator = None
     architecture = None
     if not (self.generator == None):
       generator = self.generator.getContent()
       if not (self.generator.architecture == None):
         architecture = self.generator.architecture.getContent()
+    if not (self.natives == None):
+      natives = self.natives.getContent()
+      for i in range(len(natives)):
+        natives[i] = natives[i].strip()
+        if (len(natives[i]) == 0):
+          natives[i] = None
+      while (None in natives):
+        natives.remove(None)
     path = os.path.join(cmake, variant.lower()).replace("\\", "/")
     result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, "..", self.source.getContent()).replace("\\", "/"), path, installation, variant)
     owner.getContext().log(self.node, result)
-    result = cmake_build(os.path.join(cmake, variant.lower()).replace("\\", "/"), variant)
+    result = cmake_build(os.path.join(cmake, variant.lower()).replace("\\", "/"), variant, natives)
     owner.getContext().log(self.node, result)
     return True
     
@@ -1588,7 +1643,16 @@ class CmakeBuildInstruction(BuildInstruction):
     return True
 
   def installVariant(self, owner, cmake, installation, variant):
-    result = cmake_install(os.path.join(cmake, variant.lower()).replace("\\", "/"), variant, os.path.join(installation, variant.lower()).replace("\\", "/"))
+    natives = None
+    if not (self.natives == None):
+      natives = self.natives.getContent()
+      for i in range(len(natives)):
+        natives[i] = natives[i].strip()
+        if (len(natives[i]) == 0):
+          natives[i] = None
+      while (None in natives):
+        natives.remove(None)
+    result = cmake_install(os.path.join(cmake, variant.lower()).replace("\\", "/"), variant, os.path.join(installation, variant.lower()).replace("\\", "/"), natives)
     owner.getContext().log(self.node, result)
     return True
     
@@ -2231,7 +2295,7 @@ class WGetDependency(RemoteDependency):
     
     
 class Target(Build):
-  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None, modules = None, exceptions = None, linkage = None):
+  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None, modules = None, exceptions = None, natives = None, linkage = None):
     super(Target, self).__init__()
     self.label = None
     self.subpath = None
@@ -2272,12 +2336,15 @@ class Target(Build):
     self.exceptions = None
     if (type(exceptions) == ExceptionList):
       self.exceptions = exceptions
+    self.natives = None
+    if (type(natives) == NativeList):
+      self.natives = natives
     self.linkage = None
     if (type(linkage) == String):
       self.linkage = linkage
       
-  def install(self, owner, path, installation, variant):
-    result = cmake_install(path, variant, installation)
+  def install(self, owner, path, installation, variant, natives):
+    result = cmake_install(path, variant, installation, natives)
     owner.getContext().log(self.node, result)
     return True
     
@@ -2717,6 +2784,15 @@ class Target(Build):
     return True
 
   def buildVariant(self, owner, generator, architecture, arguments, path, installation, variant):
+    natives = None
+    if not (self.natives == None):
+      natives = self.natives.getContent()
+      for i in range(len(natives)):
+        natives[i] = natives[i].strip()
+        if (len(natives[i]) == 0):
+          natives[i] = None
+      while (None in natives):
+        natives.remove(None)
     if (self.subpath == None):
       result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build").replace("\\", "/"), installation, None)
     else:
@@ -2729,9 +2805,9 @@ class Target(Build):
       else:
         result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, self.subpath.getContent()), os.path.join(path, "build").replace("\\", "/"), installation, None)
     owner.getContext().log(self.node, result)
-    result = cmake_build(os.path.join(path, "build").replace("\\", "/"), variant)
+    result = cmake_build(os.path.join(path, "build").replace("\\", "/"), variant, natives)
     owner.getContext().log(self.node, result)
-    success = self.install(owner, os.path.join(path, "build").replace("\\", "/"), installation.replace("\\", "/"), variant)
+    success = self.install(owner, os.path.join(path, "build").replace("\\", "/"), installation.replace("\\", "/"), variant, natives)
     return success
     
   def distribute(self, owner, distribution, variant):
@@ -3256,6 +3332,7 @@ class Context(Element):
     self.substitutes.append("origin")
     self.substitutes.append("install")
     self.substitutes.append("python")
+    self.substitutes.append("cores")
     self.substitutes.append("home")
     self.substitutes.append("execute")
     self.substitutes.append("encode")
@@ -3333,6 +3410,8 @@ class Context(Element):
     nodeTags.append("build")
     nodeTags.append("arguments")
     nodeTags.append("argument")
+    nodeTags.append("natives")
+    nodeTags.append("native")
     nodeTags.append("cmake")
     nodeTags.append("generator")
     nodeTags.append("source")
@@ -3377,6 +3456,7 @@ class Context(Element):
     nodeTags.append("exceptions")
     nodeTags.append("exception")
     nodeTags.append("python")
+    nodeTags.append("cores")
     nodeTags.append("home")
     nodeTags.append("execute")
     nodeTags.append("encode")
@@ -3413,6 +3493,7 @@ class Context(Element):
     nodeParents["lower"].append(self.any)
     nodeParents["upper"].append(self.any)
     nodeParents["python"].append(self.any)
+    nodeParents["cores"].append(self.any)
     nodeParents["home"].append(self.any)
     nodeParents["execute"].append(self.any)
     nodeParents["encode"].append(self.any)
@@ -3478,6 +3559,9 @@ class Context(Element):
     nodeParents["arguments"].append("build")
     nodeParents["arguments"].append("target")
     nodeParents["argument"].append("arguments")
+    nodeParents["natives"].append("cmake")
+    nodeParents["natives"].append("target")
+    nodeParents["native"].append("natives")
     nodeParents["cmake"].append("build")
     nodeParents["generator"].append("cmake")
     nodeParents["generator"].append("target")
@@ -4032,6 +4116,8 @@ def handle(context, node, tier, parents):
       element = BuildInstruction()
     elif (tag == "arguments"):
       element = ArgumentList()
+    elif (tag == "natives"):
+      element = NativeList()
     elif (tag == "variables"):
       element = VariableList()
     elif (tag == "variable"):
@@ -4318,6 +4404,10 @@ def handle(context, node, tier, parents):
         output = ensure(node.text)+flatten(output).strip()
         element = Argument()
         element.string = String(output.strip())
+      elif (tag == "native"):
+        output = ensure(node.text)+flatten(output).strip()
+        element = Native()
+        element.string = String(output.strip())
       elif (tag == "exception"):
         output = ensure(node.text)+flatten(output).strip()
         element = Exception()
@@ -4435,6 +4525,11 @@ def handle(context, node, tier, parents):
           for argument in elements["argument"]:
             element.addArgument(argument)
           elements["argument"] = None
+      elif (tag == "natives"):
+        if ("native" in elements):
+          for native in elements["native"]:
+            element.addNative(native)
+          elements["native"] = None
       elif (tag == "modules"):
         if ("module" in elements):
           for module in elements["module"]:
@@ -4490,6 +4585,11 @@ def handle(context, node, tier, parents):
             element.source = source
             break
           elements["source"] = None
+        if ("natives" in elements):
+          for natives in elements["natives"]:
+            element.natives = natives
+            break
+          elements["natives"] = None
       elif (tag == "root"):
         output = ensure(node.text)+flatten(output).strip()
         element.string = String(output.strip())
@@ -4602,6 +4702,8 @@ def handle(context, node, tier, parents):
         output = adjust(os.path.join(wd(), context.root.directory.getContent(), context.root.distribution.getContent(), context.variant.lower())).replace("\\", "/")
       elif (tag == "python"):
         output = sys.executable.replace("\\", "/")
+      elif (tag == "cores"):
+        output = str(multiprocessing.cpu_count())
       elif (tag == "home"):
         output = str(pathlib.Path.home()).replace("\\", "/")
       elif (tag == "execute"):
@@ -4842,6 +4944,11 @@ def handle(context, node, tier, parents):
             element.arguments = arguments
             break
           elements["arguments"] = None
+        if ("natives" in elements):
+          for natives in elements["natives"]:
+            element.natives = natives
+            break
+          elements["natives"] = None
         if ("packages" in elements):
           for packages in elements["packages"]:
             element.packages = packages
