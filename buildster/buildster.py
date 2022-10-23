@@ -2450,7 +2450,7 @@ class Target(Build):
     temp = "."
     if not (self.subpath == None):
       temp = self.subpath.getContent()
-    if not (os.path.join(self.getPath(owner, variant, None), temp, "CMakeLists.txt").replace("\\", "/") in files):
+    if not (os.path.realpath(os.path.join(self.getPath(owner, None, None), temp, "CMakeLists.txt")).replace("\\", "/") in files):
       descriptor = open(os.path.join(path, "CMakeLists.txt"), "w")
       base = path
       write(descriptor, "cmake_minimum_required(VERSION 3.12.0 FATAL_ERROR)")
@@ -2800,7 +2800,7 @@ class Target(Build):
       temp = "."
       if not (self.subpath == None):
         temp = self.subpath.getContent()
-      if not (os.path.join(self.getPath(owner, variant, None), temp, "CMakeLists.txt").replace("\\", "/") in files):
+      if not (os.path.realpath(os.path.join(self.getPath(owner, None, None), temp, "CMakeLists.txt")).replace("\\", "/") in files):
         result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build").replace("\\", "/"), installation, None)
       else:
         result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, self.subpath.getContent()), os.path.join(path, "build").replace("\\", "/"), installation, None)
@@ -2892,7 +2892,7 @@ class Target(Build):
             continue
           if not (match.group() == name):
             continue
-        result.append(os.path.join(root, name).replace("\\", "/"))
+        result.append(os.path.realpath(os.path.join(root, name)).replace("\\", "/"))
     return result
 
   def getIncludes(self, owner):
