@@ -2499,7 +2499,6 @@ class Target(Build):
             write(descriptor, "include(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, module.getContent().strip()).replace("\\", "/")+"\")")
           else:
             write(descriptor, "include(\""+module.getContent().strip().replace("\\", "/")+"\")")
-
         else:
           write(descriptor, "include("+module.getContent().strip()+")")
         if not (module.exports == None):
@@ -2793,21 +2792,20 @@ class Target(Build):
           natives[i] = None
       while (None in natives):
         natives.remove(None)
-    if (self.subpath == None):
-      result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build").replace("\\", "/"), installation, None)
+    files = self.getFiles(owner, "CMakeLists\\.txt")
+    temp = ""
+    subpath = "."
+    if not (self.subpath == None):
+      subpath = self.subpath.getContent()
+    if not (os.path.realpath(os.path.join(self.getPath(owner, None, None), subpath, "CMakeLists.txt")).replace("\\", "/") in files):
+      temp += os.path.realpath(os.path.join(path, "build")).replace("\\", "/")
     else:
-      files = self.getFiles(owner, "CMakeLists\\.txt")
-      temp = "."
-      if not (self.subpath == None):
-        temp = self.subpath.getContent()
-      if not (os.path.realpath(os.path.join(self.getPath(owner, None, None), temp, "CMakeLists.txt")).replace("\\", "/") in files):
-        result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], path, os.path.join(path, "build").replace("\\", "/"), installation, None)
-      else:
-        result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, self.subpath.getContent()), os.path.join(path, "build").replace("\\", "/"), installation, None)
+      temp += os.path.realpath(os.path.join(path, "build", variant.lower())).replace("\\", "/")
+    result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.realpath(os.path.join(path, subpath)).replace("\\", "/"), temp, installation, None)
     owner.getContext().log(self.node, result)
-    result = cmake_build(os.path.join(path, "build").replace("\\", "/"), variant, natives)
+    result = cmake_build(temp, variant, natives)
     owner.getContext().log(self.node, result)
-    success = self.install(owner, os.path.join(path, "build").replace("\\", "/"), installation.replace("\\", "/"), variant, natives)
+    success = self.install(owner, temp, installation.replace("\\", "/"), variant, natives)
     return success
     
   def distribute(self, owner, distribution, variant):
