@@ -30,6 +30,8 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
+globalContext = None
+
 def retrieve(context, url, path = None):
   success = True
   if (url == None):
@@ -278,27 +280,45 @@ def adjust(path):
           break
   return path
   
-def get_parent(parents, tag):
+def get_parent(parents, tag, attributes = None):
   length = len(parents)
   if (length == 0):
     return None
   for i in range(length):
+    parent = None
     temp = (length-1)-i
     if not (parents[temp] == None):
       if not (tag == None):
         if (parents[temp].tag == tag):
-          return parents[temp]
+          parent = parents[temp]
       else:
-        return parents[temp]
+        parent = parents[temp]
+    if not (parent == None):
+      if not (attributes == None):
+        for attribute in attributes:
+          if (attribute in parent.attrib): 
+            return parent
+        continue
+      return parent
   return None
   
-def get_child(node, tag):
+def get_child(node, tag, attributes = None):
   for child in node:
     if (child.tag == tag):
-      return child
-    temp = get_child(child, tag)
+      if not (attributes == None):
+        for attribute in attributes:
+          if (attribute in child.attrib):
+            return child
+      else:
+        return child
+    temp = get_child(child, tag, attributes)
     if not (temp == None):
-      return temp
+      if not (attributes == None):
+        for attribute in attributes:
+          if (attribute in child.attrib):
+            return temp
+      else:
+        return temp
   return None
   
 def execute_command(command, environment = None):
@@ -1074,6 +1094,25 @@ class Term(Object):
   def __str__(self):
     return "<"+self.toString(self.string)+">"
     
+class Timing(Object):
+  def __init__(self, string = None):
+    super(Timing, self).__init__()
+    self.string = None
+    if (type(string) == String):
+      self.string = string
+      
+  def getContent(self):
+    globalContext.record(None, str(self.string))
+    globalContext.record(None, str(globalContext.node))
+    #globalContext.report()
+    #sys.exit(0)
+    if (self.string == None):
+      return ""
+    return self.string.getContent()
+    
+  def __str__(self):
+    return "<"+self.toString(self.string)+">"
+    
 class Argument(Element):
   def __init__(self, string = None):
     super(Argument, self).__init__()
@@ -1487,7 +1526,7 @@ class BuildInstruction(Object):
     if (type(post) == PostBuildInstruction):
       self.post = post
     self.timing = None
-    if (type(timing) == String):
+    if (type(timing) == Timing):
       self.timing = timing
     
   def build(self, owner, path, subpath, installation, imports, variant):
@@ -1504,6 +1543,18 @@ class BuildInstruction(Object):
   
   def getPost(self):
     return self.post
+  
+  def setTiming(self, timing):
+    globalContext.record(None, str(self)+" / "+self.toString(self)+" = "+str(self.timing)+" -> "+str(timing))
+    self.timing = timing
+  
+  def setPre(self, pre):
+    globalContext.record(None, str(self)+" / "+self.toString(self)+" = "+str(self.pre)+" -> "+str(pre))
+    self.pre = pre
+  
+  def setPost(self, post):
+    globalContext.record(None, str(self)+" / "+self.toString(self)+" = "+str(self.post)+" -> "+str(post))
+    self.post = post
   
   def __str__(self):
     return "<BuildInstruction()>"
@@ -3073,6 +3124,7 @@ class Project(Element):
       self.context = context
       
   def buildPre(self, variant):
+    pre = self.getPre()
     path = None
     if not (self.directory == None):
       path = os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "build", "dependencies")
@@ -3101,22 +3153,24 @@ class Project(Element):
       if not (os.path.exists(path)):
         if (contains(wd(), path)):
           os.makedirs(path)
-    if (self.pre == None):
+    if (pre == None):
       return True
-    if not (self.pre.timing == None):
-      if not (self.pre.timing.getContent() == "build"):
+    if not (pre.timing == None):
+      if not (pre.timing.getContent() == "build"):
         return True
-    if not (self.pre.build(self, os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), os.path.basename(self.directory.getContent())), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent()), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "install"), {}, variant)):
+    globalContext.record(None, "buildPre")
+    if not (pre.build(self, os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), os.path.basename(self.directory.getContent())), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent()), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "install"), {}, variant)):
       return False
     return True
     
   def buildPost(self, variant):
-    if (self.post == None):
+    post = self.getPost()
+    if (post == None):
       return True
-    if not (self.post.timing == None):
-      if not (self.post.timing.getContent() == "build"):
+    if not (post.timing == None):
+      if not (post.timing.getContent() == "build"):
         return True
-    if not (self.post.build(self, os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), os.path.basename(self.directory.getContent())), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent()), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "install"), {}, variant)):
+    if not (post.build(self, os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), os.path.basename(self.directory.getContent())), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent()), os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "install"), {}, variant)):
       return False
     return True
       
@@ -3205,6 +3259,20 @@ class Project(Element):
   def getDistribution(self):
     return self.owner.context.root.getDisribution()
     
+  def getPre(self):
+    return self.pre
+    
+  def getPost(self):
+    return self.post
+    
+  def setPre(self, pre):
+    globalContext.record(None, str(self)+" / "+self.toString(self)+" = "+str(self.pre)+" -> "+str(pre))
+    self.pre = pre
+    
+  def setPost(self, post):
+    globalContext.record(None, str(self)+" / "+self.toString(self)+" = "+str(self.post)+" -> "+str(post))
+    self.post = post
+    
   def __str__(self):
     return "<"+self.toString(self.dependencies)+", "+self.toString(self.targets)+", "+self.toString(self.directory)+", "+self.toString(self.pre)+", "+self.toString(self.post)+">"
 
@@ -3236,6 +3304,10 @@ class Buildster(Element):
 class Context(Element):
   def __init__(self, data, variant, debug = True):
     super(Context, self).__init__()
+    
+    
+    global globalContext
+    globalContext = self
     
 
     self.variant = variant
@@ -3653,6 +3725,7 @@ class Context(Element):
     self.project = None
     self.error = None
     self.work = None
+    self.node = None
     self.context = self
     self.nodes = {}
     self.logs = []
@@ -3801,12 +3874,12 @@ class Context(Element):
       stack = record[3]
       self.tier = record[0]
       self.log(record[2], record[1])
-      """
+      #"""
       if (self.debug):
         for j in range(len(stack)):
           frame = stack[j]
           self.log(record[2], frame)
-      """
+      #"""
     self.tier = None
     self.log(None, "CONTEXT_REPORT_END\n")
     
@@ -3833,6 +3906,7 @@ def handle(context, node, tier, parents):
     return null
   tag = node.tag.lower()
   context.tier = tier
+  context.node = node
   context.log(node, tag)
   #context.log(node, "NODE_BEGIN\n")
   if (context.check(node, parent, parents)):
@@ -4105,13 +4179,17 @@ def handle(context, node, tier, parents):
     elif (tag == "pre"):
       element = PreBuildInstruction()
       if ("timing" in node.attrib):
-        element.timing = String(node.attrib["timing"].strip())
+        element.setTiming(Timing(String(node.attrib["timing"].strip())))
     elif (tag == "post"):
       element = PostBuildInstruction()
       if ("timing" in node.attrib):
-        element.timing = String(node.attrib["timing"].strip())
+        element.setTiming(Timing(String(node.attrib["timing"].strip())))
     elif (tag == "build"):
       element = BuildInstruction()
+      timing = get_parent(parents, None, ["timing"])
+      if not (timing == None):
+        if ("timing" in timing.attrib):
+          element.setTiming(Timing(String(timing.attrib["timing"].strip())))
     elif (tag == "arguments"):
       element = ArgumentList()
     elif (tag == "natives"):
@@ -4556,7 +4634,7 @@ def handle(context, node, tier, parents):
           elements["arguments"] = None
         if ("pre" in elements):
           for pre in elements["pre"]:
-            element.pre = pre
+            element.setPre(pre)
             if not (pre.timing == None):
               if (pre.timing.getContent() == "parse"):
                 if not (pre.build(context.project, os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), os.path.basename(context.project.directory.getContent())), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent()), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), "install"), {}, context.variant)):
@@ -4565,7 +4643,7 @@ def handle(context, node, tier, parents):
           elements["pre"] = None
         if ("post" in elements):
           for post in elements["post"]:
-            element.post = post
+            element.setPost(post)
             if not (post.timing == None):
               if (post.timing.getContent() == "parse"):
                 if not (post.build(context.project, os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), os.path.basename(context.project.directory.getContent())), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent()), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), "install"), {}, context.variant)):
@@ -4853,7 +4931,7 @@ def handle(context, node, tier, parents):
           for value in elements[key]:
             element.instructions.append(value)
         if (parent.tag == "project"):
-          context.projects[len(context.projects)-1].pre = element
+          context.projects[len(context.projects)-1].setPre(element)
           if not (element.timing == None):
             if (element.timing.getContent() == "discover"):
               context.projects[len(context.projects)-1].buildPre(context.variant)
@@ -4869,7 +4947,7 @@ def handle(context, node, tier, parents):
           for value in elements[key]:
             element.instructions.append(value)
         if (parent.tag == "project"):
-          context.projects[len(context.projects)-1].post = element
+          context.projects[len(context.projects)-1].setPost(element)
           if not (element.timing == None):
             if (element.timing.getContent() == "discover"):
               context.projects[len(context.projects)-1].buildPost(context.variant)
@@ -4909,7 +4987,7 @@ def handle(context, node, tier, parents):
           elements["targets"][0] = None
         if ("pre" in elements):
           for pre in elements["pre"]:
-            element.pre = pre
+            element.setPre(pre)
             if not (pre.timing == None):
               if (pre.timing.getContent() == "parse"):
                 element.buildPre(context.variant)
@@ -4919,7 +4997,7 @@ def handle(context, node, tier, parents):
           elements["pre"] = None
         if ("post" in elements):
           for post in elements["post"]:
-            element.post = post
+            element.setPost(post)
             if not (post.timing == None):
               if (post.timing.getContent() == "parse"):
                 element.buildPost(context.variant)
@@ -4989,7 +5067,7 @@ def handle(context, node, tier, parents):
           elements["generator"] = None
         if ("pre" in elements):
           for pre in elements["pre"]:
-            element.pre = pre
+            element.setPre(pre)
             if not (pre.timing == None):
               if (pre.timing.getContent() == "parse"):
                 if not (pre.build(context.project, os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), os.path.basename(context.project.directory.getContent())), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent()), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), "install"), {}, variant)):
@@ -4998,7 +5076,7 @@ def handle(context, node, tier, parents):
           elements["pre"] = None
         if ("post" in elements):
           for post in elements["post"]:
-            element.post = post
+            element.setPost(post)
             if not (post.timing == None):
               if (post.timing.getContent() == "parse"):
                 if not (post.build(context.project, os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), os.path.basename(context.project.directory.getContent())), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent()), os.path.join(wd(), context.root.directory.getContent(), context.project.directory.getContent(), "install"), {}, variant)):
