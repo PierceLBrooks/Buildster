@@ -37,7 +37,7 @@ def run(source, target):
         temp += name[i:(i+1)].lower()
       if (temp.endswith("port")):
         temp += "er"
-    print("from .internal."+temp+" import "+name+"\n")
+    print("from ."+temp+" import "+name+"\n")
     temp += ".py"
     path = os.path.join(os.getcwd(), target, temp)
     descriptor = open(path, "w")
@@ -66,8 +66,8 @@ def run(source, target):
           temp += name[i:(i+1)].lower()
         if (temp.endswith("port")):
           temp += "er"
-      descriptor.write("from .internal."+temp+" import "+name+"\n")
-    descriptor.write("\nfrom .internal.utilities import *\n\n")
+      descriptor.write("from ."+temp+" import "+name+"\n")
+    descriptor.write("\nfrom .utilities import *\n\n")
     for line in objects[key]:
       descriptor.write(line)
     descriptor.close()
