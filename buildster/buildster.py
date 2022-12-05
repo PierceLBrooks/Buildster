@@ -1,43 +1,22 @@
 
 # Author: Pierce Brooks
 
-import re
 import os
 import ast
 import ssl
 import sys
-import copy
 import json
-import stat
 import shlex
-import shutil
 import base64
-import urllib
-import fnmatch
 import pathlib
-import zipfile
-import tarfile
-import inspect
 import logging
-import pyunpack
-import platform
-import importlib
 import traceback
-import subprocess
 import multiprocessing
 import xml.etree.ElementTree as xml_tree
-from urllib.parse import urlparse, unquote
-from urllib.request import urlretrieve
-from datetime import datetime
 
 from internal import *
 from internal.utilities import *
-from internal.object import Object
-from internal.element import Element
-from internal.performer import Performer
-from internal.build import Build
 from internal.string import String
-from internal.list import List
 from internal.key import Key
 from internal.value import Value
 from internal.destination import Destination
@@ -92,7 +71,6 @@ from internal.shell_build_instruction import ShellBuildInstruction
 from internal.commands_build_instruction import CommandsBuildInstruction
 from internal.command_build_instruction import CommandBuildInstruction
 from internal.setter import Setter
-from internal.dependency import Dependency
 from internal.remote_dependency import RemoteDependency
 from internal.dependency_list import DependencyList
 from internal.local_dependency import LocalDependency
@@ -101,7 +79,6 @@ from internal.password import Password
 from internal.credentials import Credentials
 from internal.git_repo_dependency import GitRepoDependency
 from internal.w_get_dependency import WGetDependency
-from internal.target import Target
 from internal.target_list import TargetList
 from internal.executable_target import ExecutableTarget
 from internal.library_target import LibraryTarget
