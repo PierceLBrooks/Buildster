@@ -30,13 +30,13 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.string import String
-from .internal.content import Content
-from .internal.exporter import Export
-from .internal.importer import Import
-from .internal.target import Target
+from .string import String
+from .content import Content
+from .build import Export
+from .build import Import
+from .target import Target
 
-from .internal.utilities import *
+from .utilities import *
 
 class ExecutableTarget(Target):
   def __init__(self, label = None, definitions = None, links = None, imports = None):

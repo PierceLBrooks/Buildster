@@ -30,37 +30,36 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.build import Build
-from .internal.string import String
-from .internal.list import List
-from .internal.content import Content
-from .internal.generator import Generator
-from .internal.path import Path
-from .internal.label import Label
-from .internal.argument import Argument
-from .internal.argument_list import ArgumentList
-from .internal.native import Native
-from .internal.native_list import NativeList
-from .internal.exception import Exception
-from .internal.exception_list import ExceptionList
-from .internal.package import Package
-from .internal.package_list import PackageList
-from .internal.module import Module
-from .internal.module_list import ModuleList
-from .internal.definition import Definition
-from .internal.definition_list import DefinitionList
-from .internal.link import Link
-from .internal.link_list import LinkList
-from .internal.exporter import Export
-from .internal.export_list import ExportList
-from .internal.importer import Import
-from .internal.import_list import ImportList
-from .internal.build_instruction import BuildInstruction
-from .internal.pre_build_instruction import PreBuildInstruction
-from .internal.post_build_instruction import PostBuildInstruction
-from .internal.project import Project
+from .build import Build
+from .string import String
+from .list import List
+from .content import Content
+from .generator import Generator
+from .path import Path
+from .label import Label
+from .argument import Argument
+from .argument_list import ArgumentList
+from .native import Native
+from .native_list import NativeList
+from .exception import Exception
+from .exception_list import ExceptionList
+from .package import Package
+from .package_list import PackageList
+from .module import Module
+from .module_list import ModuleList
+from .definition import Definition
+from .definition_list import DefinitionList
+from .link import Link
+from .link_list import LinkList
+from .build import Export
+from .export_list import ExportList
+from .build import Import
+from .import_list import ImportList
+from .build_instruction import BuildInstruction
+from .build_instruction import PreBuildInstruction
+from .build_instruction import PostBuildInstruction
 
-from .internal.utilities import *
+from .utilities import *
 
 class Target(Build):
   def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None, modules = None, exceptions = None, natives = None, linkage = None):

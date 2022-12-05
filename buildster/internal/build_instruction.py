@@ -30,17 +30,15 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.object import Object
-from .internal.build import Build
-from .internal.string import String
-from .internal.list import List
-from .internal.path import Path
-from .internal.argument import Argument
-from .internal.argument_list import ArgumentList
-from .internal.pre_build_instruction import PreBuildInstruction
-from .internal.post_build_instruction import PostBuildInstruction
+from .object import Object
+from .build import Build
+from .string import String
+from .list import List
+from .path import Path
+from .argument import Argument
+from .argument_list import ArgumentList
 
-from .internal.utilities import *
+from .utilities import *
 
 class BuildInstruction(Object):
   def __init__(self, arguments = None, pre = None, post = None, timing = None):
@@ -75,4 +73,56 @@ class BuildInstruction(Object):
   
   def __str__(self):
     return "<BuildInstruction()>"
+    
+class PreBuildInstruction(BuildInstruction):
+  def __init__(self):
+    super(PreBuildInstruction, self).__init__()
+    self.instructions = []
+      
+  def build(self, owner, path, subpath, installation, imports, variant):
+    length = len(self.instructions)
+    for i in range(length):
+      if (isinstance(self.instructions[i], BuildInstruction)):
+        if not (self.instructions[i].build(owner, path, subpath, installation, imports, variant)):
+          return False
+    return True
+    
+  def install(self, owner, path, subpath, installation, variant):
+    return True
+    
+  def __str__(self):
+    string = "<"
+    length = len(self.instructions)
+    for i in range(length):
+      string += self.toString(self.instructions[i])
+      if not (i == length-1):
+        string += ", "
+    string += ">"
+    return string
+    
+class PostBuildInstruction(BuildInstruction):
+  def __init__(self):
+    super(PostBuildInstruction, self).__init__()
+    self.instructions = []
+      
+  def build(self, owner, path, subpath, installation, imports, variant):
+    length = len(self.instructions)
+    for i in range(length):
+      if (isinstance(self.instructions[i], BuildInstruction)):
+        if not (self.instructions[i].build(owner, path, subpath, installation, imports, variant)):
+          return False
+    return True
+    
+  def install(self, owner, path, subpath, installation, variant):
+    return True
+    
+  def __str__(self):
+    string = "<"
+    length = len(self.instructions)
+    for i in range(length):
+      string += self.toString(self.instructions[i])
+      if not (i == length-1):
+        string += ", "
+    string += ">"
+    return string
     

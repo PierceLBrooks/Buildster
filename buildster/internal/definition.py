@@ -30,13 +30,13 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.object import Object
-from .internal.string import String
-from .internal.key import Key
-from .internal.value import Value
-from .internal.content import Content
+from .object import Object
+from .string import String
+from .key import Key
+from .value import Value
+from .content import Content
 
-from .internal.utilities import *
+from .utilities import *
 
 class Definition(Object):
   def __init__(self, key = None, value = None):

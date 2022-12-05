@@ -30,12 +30,12 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.build import Build
-from .internal.string import String
-from .internal.build_instruction import BuildInstruction
-from .internal.command_build_instruction import CommandBuildInstruction
+from .build import Build
+from .string import String
+from .build_instruction import BuildInstruction
+from .command_build_instruction import CommandBuildInstruction
 
-from .internal.utilities import *
+from .utilities import *
 
 class CommandsBuildInstruction(BuildInstruction):
   def __init__(self, arguments = None, generator = None, source = None):

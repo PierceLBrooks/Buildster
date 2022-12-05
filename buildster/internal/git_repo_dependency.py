@@ -30,17 +30,17 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.string import String
-from .internal.content import Content
-from .internal.branch import Branch
-from .internal.path import Path
-from .internal.exporter import Export
-from .internal.importer import Import
-from .internal.dependency import Dependency
-from .internal.remote_dependency import RemoteDependency
-from .internal.credentials import Credentials
+from .string import String
+from .content import Content
+from .branch import Branch
+from .path import Path
+from .build import Export
+from .build import Import
+from .dependency import Dependency
+from .remote_dependency import RemoteDependency
+from .credentials import Credentials
 
-from .internal.utilities import *
+from .utilities import *
 
 class GitRepoDependency(RemoteDependency):
   def __init__(self, url = None, branch = None, credentials = None):

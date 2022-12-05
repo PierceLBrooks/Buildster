@@ -30,12 +30,12 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.object import Object
-from .internal.string import String
-from .internal.username import Username
-from .internal.password import Password
+from .object import Object
+from .string import String
+from .username import Username
+from .password import Password
 
-from .internal.utilities import *
+from .utilities import *
 
 class Credentials(Object):
   def __init__(self, username = None, password = None):

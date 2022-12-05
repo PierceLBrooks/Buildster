@@ -30,21 +30,21 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.element import Element
-from .internal.string import String
-from .internal.list import List
-from .internal.content import Content
-from .internal.label import Label
-from .internal.component import Component
-from .internal.component_list import ComponentList
-from .internal.hint import Hint
-from .internal.hint_list import HintList
-from .internal.variable import Variable
-from .internal.variable_list import VariableList
-from .internal.exporter import Export
-from .internal.export_list import ExportList
+from .element import Element
+from .string import String
+from .list import List
+from .content import Content
+from .label import Label
+from .component import Component
+from .component_list import ComponentList
+from .hint import Hint
+from .hint_list import HintList
+from .variable import Variable
+from .variable_list import VariableList
+from .build import Export
+from .export_list import ExportList
 
-from .internal.utilities import *
+from .utilities import *
 
 class Package(Element):
   def __init__(self, label = None, exports = None, hints = None, variables = None, components = None):

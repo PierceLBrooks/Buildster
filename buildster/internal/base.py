@@ -30,12 +30,13 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.element import Element
-from .internal.build import Build
-from .internal.string import String
-from .internal.path import Path
+from .element import Element
+from .build import Build
+from .string import String
+from .path import Path
+from .context import Context
 
-from .internal.utilities import *
+from .utilities import *
 
 class Buildster(Element):
   def __init__(self, directory = None, distribution = None, cpp = None, context = None):
@@ -44,13 +45,13 @@ class Buildster(Element):
     self.distribution = None
     self.cpp = String("14")
     self.context = None
-    if (str(type(directory)) == "Path"):
+    if ("Path" in str(type(directory))):
       self.directory = directory
-    if (str(type(distribution)) == "Path"):
+    if ("Path" in str(type(distribution))):
       self.distribution = distribution
-    if (str(type(cpp) == "String")):
+    if ("String" in str(type(cpp))):
       self.cpp = cpp
-    if (str(type(context)) == "Context"):
+    if ("Context" in str(type(context))):
       self.context = context
       
   def build(self, owner, variant):
@@ -61,4 +62,3 @@ class Buildster(Element):
     
   def __str__(self):
     return "<"+self.toString(self.directory)+", "+self.toString(self.distribution)+">"
-

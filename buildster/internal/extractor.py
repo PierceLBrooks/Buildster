@@ -30,12 +30,12 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.performer import Performer
-from .internal.string import String
-from .internal.content import Content
-from .internal.path import Path
+from .performer import Performer
+from .string import String
+from .content import Content
+from .path import Path
 
-from .internal.utilities import *
+from .utilities import *
 
 class Extractor(Performer):
   def __init__(self, path = None):

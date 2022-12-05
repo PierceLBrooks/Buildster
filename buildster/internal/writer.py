@@ -30,12 +30,12 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.performer import Performer
-from .internal.string import String
-from .internal.destination import Destination
-from .internal.content import Content
+from .performer import Performer
+from .string import String
+from .destination import Destination
+from .content import Content
 
-from .internal.utilities import *
+from .utilities import *
 
 class Writer(Performer):
   def __init__(self, destination = None, content = None):

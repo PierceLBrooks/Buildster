@@ -30,15 +30,15 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.performer import Performer
-from .internal.build import Build
-from .internal.string import String
-from .internal.key import Key
-from .internal.value import Value
-from .internal.content import Content
-from .internal.build_instruction import BuildInstruction
+from .performer import Performer
+from .build import Build
+from .string import String
+from .key import Key
+from .value import Value
+from .content import Content
+from .build_instruction import BuildInstruction
 
-from .internal.utilities import *
+from .utilities import *
 
 class Setter(BuildInstruction, Performer):
   def __init__(self, key = None, value = None):

@@ -30,18 +30,18 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.build import Build
-from .internal.string import String
-from .internal.list import List
-from .internal.content import Content
-from .internal.generator import Generator
-from .internal.path import Path
-from .internal.native import Native
-from .internal.native_list import NativeList
-from .internal.exporter import Export
-from .internal.build_instruction import BuildInstruction
+from .build import Build
+from .string import String
+from .list import List
+from .content import Content
+from .generator import Generator
+from .path import Path
+from .native import Native
+from .native_list import NativeList
+from .build import Export
+from .build_instruction import BuildInstruction
 
-from .internal.utilities import *
+from .utilities import *
 
 class CmakeBuildInstruction(BuildInstruction):
   def __init__(self, arguments = None, generator = None, source = None, natives = None):

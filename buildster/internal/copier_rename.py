@@ -30,12 +30,11 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.object import Object
-from .internal.string import String
-from .internal.content import Content
-from .internal.copier import Copier
+from .object import Object
+from .string import String
+from .content import Content
 
-from .internal.utilities import *
+from .utilities import *
 
 class CopierRename(Object):
   def __init__(self, name = None):

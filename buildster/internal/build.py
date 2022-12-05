@@ -30,15 +30,67 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.element import Element
-from .internal.content import Content
-from .internal.generator import Generator
-from .internal.label import Label
-from .internal.exporter import Export
-from .internal.importer import Import
+from .object import Object
+from .element import Element
+from .content import Content
+from .generator import Generator
+from .label import Label
+from .key import Key
+from .value import Value
+from .string import String
 
-from .internal.utilities import *
+from .utilities import *
 
+class Export(Object):
+  def __init__(self, key = None, value = None, export = None, exceptions = None):
+    super(Export, self).__init__()
+    self.key = None
+    if (type(key) == Key):
+      self.key = key
+    self.value = None
+    if (type(value) == Value):
+      self.value = value
+    self.export = None
+    if (type(export) == String):
+      self.export = export
+    self.exceptions = None
+    if (type(exceptions) == String):
+      self.exceptions = exceptions
+      
+  def doExport(self, owner, variant):
+    exceptions = None
+    if not (self.exceptions == None):
+      exceptions = self.exceptions.getContent()
+    if not (isinstance(owner, Build)):
+      return False
+    if not (exceptions == None):
+      if (owner.getLabel() in exceptions):
+        return True
+    owner.addExport(self, variant, exceptions)
+    return True
+      
+  def __str__(self):
+    return "<"+self.toString(self.key)+", "+self.toString(self.value)+", "+self.toString(self.export)+">"
+    
+class Import(Object):
+  def __init__(self, label = None):
+    super(Import, self).__init__()
+    self.label = None
+    if (type(label) == Label):
+      self.label = label
+      
+  def getContent(self):
+    return self.label.getContent()
+    
+  def doImport(self, owner, variant):
+    if not (isinstance(owner, Build)):
+      return False
+    owner.addImport(self, variant)
+    return True
+    
+  def __str__(self):
+    return "<"+self.toString(self.label)+">"
+    
 class Build(Element):
   def __init(self):
     super(Build, self).__init__()

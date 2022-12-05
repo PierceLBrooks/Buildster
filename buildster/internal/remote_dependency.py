@@ -30,12 +30,12 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.url import URL
-from .internal.exporter import Export
-from .internal.importer import Import
-from .internal.dependency import Dependency
+from .url import URL
+from .build import Export
+from .build import Import
+from .dependency import Dependency
 
-from .internal.utilities import *
+from .utilities import *
 
 class RemoteDependency(Dependency):
   def __init__(self, url = None):

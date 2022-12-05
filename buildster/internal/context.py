@@ -30,6 +30,10 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
+from .element import Element
+
+from .utilities import *
+
 class Context(Element):
   def __init__(self, data, variant, debug = True):
     super(Context, self).__init__()

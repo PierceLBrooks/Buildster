@@ -30,18 +30,18 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.element import Element
-from .internal.string import String
-from .internal.list import List
-from .internal.content import Content
-from .internal.path import Path
-from .internal.exporter import Export
-from .internal.dependency import Dependency
-from .internal.dependency_list import DependencyList
-from .internal.target import Target
-from .internal.target_list import TargetList
+from .element import Element
+from .string import String
+from .list import List
+from .content import Content
+from .path import Path
+from .build import Export
+from .dependency import Dependency
+from .dependency_list import DependencyList
+from .target import Target
+from .target_list import TargetList
 
-from .internal.utilities import *
+from .utilities import *
 
 class Project(Element):
   def __init__(self, dependencies = None, targets = None, directory = None, cmake_modules = None, context = None):
@@ -62,7 +62,7 @@ class Project(Element):
       self.directory = directory
     if (type(cmake_modules) == Path):
       self.cmake_modules = cmake_modules
-    if (str(type(context)) == "Context"):
+    if ("Context" in str(type(context))):
       self.context = context
       
   def buildPre(self, variant):

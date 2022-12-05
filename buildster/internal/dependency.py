@@ -30,18 +30,18 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.build import Build
-from .internal.list import List
-from .internal.content import Content
-from .internal.path import Path
-from .internal.label import Label
-from .internal.exporter import Export
-from .internal.export_list import ExportList
-from .internal.importer import Import
-from .internal.import_list import ImportList
-from .internal.build_instruction import BuildInstruction
+from .build import Build
+from .list import List
+from .content import Content
+from .path import Path
+from .label import Label
+from .build import Export
+from .export_list import ExportList
+from .build import Import
+from .import_list import ImportList
+from .build_instruction import BuildInstruction
 
-from .internal.utilities import *
+from .utilities import *
 
 class Dependency(Build):
   def __init__(self, subpath = None, label = None, instruction = None, imports = None, exports = None):

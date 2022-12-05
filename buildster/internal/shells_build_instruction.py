@@ -30,13 +30,13 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.build import Build
-from .internal.string import String
-from .internal.content import Content
-from .internal.build_instruction import BuildInstruction
-from .internal.shell_build_instruction import ShellBuildInstruction
+from .build import Build
+from .string import String
+from .content import Content
+from .build_instruction import BuildInstruction
+from .shell_build_instruction import ShellBuildInstruction
 
-from .internal.utilities import *
+from .utilities import *
 
 class ShellsBuildInstruction(BuildInstruction):
   def __init__(self, arguments = None, generator = None, source = None):

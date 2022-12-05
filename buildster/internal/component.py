@@ -30,11 +30,11 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.element import Element
-from .internal.string import String
-from .internal.content import Content
+from .element import Element
+from .string import String
+from .content import Content
 
-from .internal.utilities import *
+from .utilities import *
 
 class Component(Element):
   def __init__(self, string = None):

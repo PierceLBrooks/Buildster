@@ -30,15 +30,15 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.performer import Performer
-from .internal.string import String
-from .internal.destination import Destination
-from .internal.content import Content
-from .internal.copier_source import CopierSource
-from .internal.copier_destination import CopierDestination
-from .internal.copier_rename import CopierRename
+from .performer import Performer
+from .string import String
+from .destination import Destination
+from .content import Content
+from .copier_source import CopierSource
+from .copier_destination import CopierDestination
+from .copier_rename import CopierRename
 
-from .internal.utilities import *
+from .utilities import *
 
 class Copier(Performer):
   def __init__(self, source = None, destination = None, rename = None):

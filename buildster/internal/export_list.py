@@ -30,10 +30,10 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.list import List
-from .internal.exporter import Export
+from .list import List
+from .build import Export
 
-from .internal.utilities import *
+from .utilities import *
 
 class ExportList(List):
   def __init__(self):

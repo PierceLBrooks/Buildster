@@ -30,15 +30,15 @@ from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
 from datetime import datetime
 
-from .internal.element import Element
-from .internal.string import String
-from .internal.list import List
-from .internal.content import Content
-from .internal.label import Label
-from .internal.exporter import Export
-from .internal.export_list import ExportList
+from .element import Element
+from .string import String
+from .list import List
+from .content import Content
+from .label import Label
+from .build import Export
+from .export_list import ExportList
 
-from .internal.utilities import *
+from .utilities import *
 
 class Module(Element):
   def __init__(self, label = None, exports = None):
