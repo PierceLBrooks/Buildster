@@ -3,7 +3,6 @@ import sys
 import shlex
 import logging
 import traceback
-import subprocess
 from buildster import buildster as build
 
 def main():
