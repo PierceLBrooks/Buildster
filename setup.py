@@ -31,7 +31,7 @@ requirements.append("pyunpack")
 if (platform.system().lower() == "linux"):
     requirements.append("pypatchelf")
 setup(name='buildster',
-      version='1.3',
+      version='1.4',
       maintainer="Pierce L. Brooks",
       maintainer_email="piercebrks@gmail.com",
       author="Pierce L. Brooks",
