@@ -407,6 +407,10 @@ def handle(context, node, tier, parents):
         element.cpp = String(node.attrib["cpp"].strip())
       else:
         element.cpp = String("14")
+      if ("linker" in node.attrib):
+        element.linker = String(node.attrib["linker"].strip())
+      else:
+        element.linker = String("CXX")
       context.root = element
     elif (tag == "project"):
       element = Project()

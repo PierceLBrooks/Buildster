@@ -7,11 +7,12 @@ from .string import String
 
 
 class Buildster(Element):
-  def __init__(self, directory = None, distribution = None, cpp = None, context = None):
+  def __init__(self, directory = None, distribution = None, cpp = None, linker = None, context = None):
     super(Buildster, self).__init__()
     self.directory = None
     self.distribution = None
     self.cpp = String("14")
+    self.linker = String("CXX")
     self.context = None
     if ("Path" in str(type(directory))):
       self.directory = directory
@@ -19,6 +20,8 @@ class Buildster(Element):
       self.distribution = distribution
     if ("String" in str(type(cpp))):
       self.cpp = cpp
+    if ("String" in str(type(linker))):
+      self.linker = linker
     if ("Context" in str(type(context))):
       self.context = context
       

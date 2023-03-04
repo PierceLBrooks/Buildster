@@ -466,6 +466,7 @@ class Target(Build):
           if (platform.system() == "Darwin"):
             write(descriptor, "add_custom_command(TARGET "+self.label.getContent()+" POST_BUILD COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath \"@executable_path/\" $<TARGET_FILE:"+self.label.getContent()+"> || :)")
           write(descriptor, "target_compile_features("+self.label.getContent()+" PRIVATE cxx_std_"+context.root.cpp.getContent()+")")
+          write(descriptor, "set_target_properties("+self.label.getContent()+" PROPERTIES LINKER_LANGUAGE "+context.root.linker.getContent()+")")
         elif ("Library" in target):
           if (self.linkage == None):
             write(descriptor, "add_library("+self.label.getContent()+" ${BUILDSTER_FILES})")
