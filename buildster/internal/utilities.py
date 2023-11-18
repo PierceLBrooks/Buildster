@@ -202,7 +202,10 @@ def move(source, destination, context = None, rename = None):
     try:
       src = src.replace("\\", "/")
       dst = dst.replace("\\", "/")
-      shutil.copyfile(src, dst)
+      if (os.path.isdir(src)):
+        shutil.copytree(src, dst)
+      else:
+        shutil.copyfile(src, dst)
     except:
       logging.error(traceback.format_exc())
       success = False
