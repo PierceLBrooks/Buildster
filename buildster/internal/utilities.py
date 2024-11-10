@@ -164,10 +164,12 @@ def move(source, destination, context = None, rename = None):
             src = ""
     if (len(src) == 0):
       src += source
-    for i in range(len(src)):
-      if (src[i:(i+1)] == "."):
-        index = i
-    if (index > -1):
+    index = len(src)-1
+    while ((index < 0) or (index > len(src)-1)):
+      if (src[index:(index+1)] == "."):
+        break
+      index -= 1
+    if ((index < 0) or (index > len(src)-1)):
       extension = src[index:]
     if (os.path.exists(destination)):
       if (os.path.isdir(destination)):

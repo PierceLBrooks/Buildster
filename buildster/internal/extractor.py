@@ -34,12 +34,13 @@ class Extractor(Performer):
       return False
     path = os.path.dirname(content)
     filename = os.path.basename(content)
-    index = -1
-    for i in range(len(filename)):
-      if (filename[i:(i+1)] == "."):
-        index = i
+    index = len(filename)-1
+    while ((index > -1) and (index < len(filename))):
+      if (filename[index:(index+1)] == "."):
         break
-    if (index < 0):
+      index -= 1
+    if ((index < 0) or (index > len(filename)-1)):
+      context.log(None, "Bad extraction extension!")
       return False
     extension = filename[index:].lower()
     filename = filename[:index]

@@ -117,12 +117,12 @@ class Project(Element):
     for root, folders, files in os.walk(path):
       for name in files:
         target = os.path.join(root, name).replace("\\", "/")
-        index = -1
-        for i in range(len(name)):
-          if (name[i:(i+1)] == "."):
-            index = i
+        index = len(name)-1
+        while ((index > -1) and (index < len(name))):
+          if (name[index:(index+1)] == "."):
             break
-        if (index < 0):
+          index -= 1
+        if ((index < 0) or (index > len(name)-1)):
           continue
         extension = name[index:]
         if (len(extension) < 2):
