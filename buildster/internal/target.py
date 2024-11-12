@@ -326,11 +326,15 @@ class Target(Build):
         else:
           write(descriptor, "link_directories(\""+links[len(links)-1]+"\")")
       if not (self.links == None):
+        matches = []
         for i in range(len(self.links.content)):
           link = self.links.content[i].getContent().strip()
           linkage = self.links.content[i].linkage
+          language = self.links.content[i].language
           if not (linkage == None):
             linkage = linkage.getContent().strip()
+          if not (language == None):
+            language = language.getContent().strip()
           if ("*" in link):
             for j in range(len(links)):
               for root, folders, files in os.walk(links[j]):
@@ -349,7 +353,24 @@ class Target(Build):
                             if not (owner.getContext().libraries[k] in owner.getContext().shares):
                               continue
                       if (name.endswith("."+owner.getContext().libraries[k])):
-                        write(descriptor, "link_libraries(\""+name+"\")")
+                        if not (language == None):
+                          match = "BUILDSTER_"+link.replace("*", "_").replace("-", "_").replace(".", "_")
+                          while (match in matches):
+                            match += "_"
+                          matches.append(match)
+                          if not (linkage == None):
+                            write(descriptor, "add_library("+match+" "+linkage.upper()+" IMPORTED)")
+                          else:
+                            write(descriptor, "add_library("+match+" IMPORTED)")
+                          if (contains(wd(), os.path.join(root, name))):
+                            write(descriptor, "set_target_properties("+match+" PROPERTIES IMPORTED_LOCATION \"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, os.path.join(root, name))+"\")")
+                          else:
+                            write(descriptor, "set_target_properties("+match+" PROPERTIES IMPORTED_LOCATION \""+os.path.join(root, name).replace("\\", "/")+"\")")
+                          if not (language == None):
+                            write(descriptor, "set_target_properties("+match+" PROPERTIES LINKER_LANGUAGE "+language+")")
+                          write(descriptor, "link_libraries("+match+")")
+                        else:
+                          write(descriptor, "link_libraries(\""+name+"\")")
                         break
           else:
             write(descriptor, "link_libraries("+link+")")

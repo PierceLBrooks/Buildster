@@ -404,6 +404,7 @@ class Context(Element):
     nodeAttributes["target"].append(["type", False])
     nodeAttributes["target"].append(["linkage", True])
     nodeAttributes["link"].append(["linkage", True])
+    nodeAttributes["link"].append(["language", True])
     nodeAttributes["pre"].append(["timing", True])
     nodeAttributes["post"].append(["timing", True])
     nodeAttributes["search"].append(["type", False])

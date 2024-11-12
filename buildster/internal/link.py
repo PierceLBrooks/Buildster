@@ -7,7 +7,7 @@ from .string import String
 
 
 class Link(Object):
-  def __init__(self, string = None, linkage = None):
+  def __init__(self, string = None, linkage = None, language = None):
     super(Link, self).__init__()
     self.string = None
     if (type(string) == String):
@@ -15,6 +15,9 @@ class Link(Object):
     self.linkage = None
     if (type(linkage) == String):
       self.linkage = linkage
+    self.language = None
+    if (type(language) == String):
+      self.language = language
       
   def getContent(self):
     if (self.string == None):
