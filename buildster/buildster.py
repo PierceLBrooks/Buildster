@@ -1186,6 +1186,8 @@ def handle(context, node, tier, parents):
         element.string = String(output.strip())
         if ("linkage" in node.attrib):
           element.linkage = String(node.attrib["linkage"].strip())
+        if ("language" in node.attrib):
+          element.language = String(node.attrib["language"].strip())
       elif (tag == "pre"):
         for key in elements:
           for value in elements[key]:
