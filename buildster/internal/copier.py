@@ -74,7 +74,8 @@ class Copier(Performer):
       if ("*" in str(os.path.basename(source))):
         if (os.path.isdir(os.path.dirname(source))):
           for root, folders, files in os.walk(os.path.dirname(source)):
-            for name in files:
+            names = unique(folders+files)
+            for name in names:
               if (fnmatch.fnmatch(name, str(os.path.basename(source)))):
                 temp = None
                 if (rename == None):
