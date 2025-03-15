@@ -1060,95 +1060,6 @@ def handle(context, node, tier, parents):
       elif (tag == "decode"):
         output = ensure(node.text)+flatten(output).strip()
         output = base64.b64decode(output.strip().encode("ascii")).decode("ascii")
-      elif (tag == "install"):
-        others = parents
-        if ("label" in node.attrib):
-          label = node.attrib["label"].strip()
-          if (label in context.labels):
-            others = get_parents(context.labels[label])
-        dependency = get_parent(others, "dependency")
-        if not (dependency == None):
-          label = get_child(dependency, "label")
-          if not (label == None):
-            project = get_parent(others, "project")
-            if not (project == None):
-              temp = handle(context, label, tier, [dependency])
-              output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "dependencies", temp[1], context.variant.lower())).replace("\\", "/")
-            else:
-              context.report(node, "No \"project\" ancestor for \"label\" node!\n")
-              result = False
-          else:
-            context.report(node, "No \"label\" descendant for \"dependency\" node!\n")
-            result = False
-        else:
-          target = get_parent(others, "target")
-          if not (target == None):
-            label = get_child(target, "label")
-            if not (label == None):
-              project = get_parent(others, "project")
-              if not (project == None):
-                temp = handle(context, label, tier, [target])
-                output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "targets", temp[1], context.variant.lower())).replace("\\", "/")
-              else:
-                context.report(node, "No \"project\" ancestor for \"label\" node!\n")
-                result = False
-            else:
-              context.report(node, "No \"label\" descendant for \"target\" node!\n")
-              result = False
-          else:
-            project = get_parent(others, "project")
-            if not (project == None):
-              output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"])).replace("\\", "/")
-            else:
-              context.report(node, "No \"dependency\", \"target\", or \"project\" ancestor for \"install\" node!\n")
-              result = False
-      elif (tag == "origin"):
-        others = parents
-        if ("label" in node.attrib):
-          label = node.attrib["label"].strip()
-          if (label in context.labels):
-            others = get_parents(context.labels[label])
-        dependency = get_parent(others, "dependency")
-        if not (dependency == None):
-          local = get_child(dependency, "local")
-          if not (local == None):
-            temp = handle(context, get_child(local, "path"), tier, [local])
-            output = flatten(temp[1]).strip().replace("\\", "/")
-          else:
-            label = get_child(dependency, "label")
-            if not (label == None):
-              project = get_parent(others, "project")
-              if not (project == None):
-                temp = handle(context, label, tier, [dependency])
-                output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "build", "dependencies", temp[1].strip())).replace("\\", "/")
-              else:
-                context.report(node, "No \"project\" ancestor for \"label\" node!\n")
-                result = False
-            else:
-              context.report(node, "No \"label\" descendant for \"dependency\" node!\n")
-              result = False
-        else:
-          target = get_parent(others, "target")
-          if not (target == None):
-            label = get_child(target, "label")
-            if not (label == None):
-              project = get_parent(others, "project")
-              if not (project == None):
-                temp = handle(context, label, tier, [target])
-                output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], temp[1])).replace("\\", "/")
-              else:
-                context.report(node, "No \"project\" ancestor for \"label\" node!\n")
-                result = False
-            else:
-              context.report(node, "No \"label\" descendant for \"target\" node!\n")
-              result = False
-          else:
-            project = get_parent(others, "project")
-            if not (project == None):
-              output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"])).replace("\\", "/")
-            else:
-              context.report(node, "No \"dependency\", \"target\", or \"project\" ancestor for \"origin\" node!\n")
-              result = False
       elif (tag == "default"):
         output = ensure(node.text)+flatten(output).strip()
         output = output.strip()
@@ -1182,6 +1093,99 @@ def handle(context, node, tier, parents):
       if (tag == "data"):
         output = ensure(context.get(node.attrib["id"])).strip()
         context.log(node, output+"\n")
+      elif (tag == "install"):
+        others = []+parents
+        if ("label" in node.attrib):
+          label = node.attrib["label"].strip()
+          if (label in context.labels):
+            others = get_parents(context.labels[label])
+        dependency = get_parent(others, "dependency")
+        if not (dependency == None):
+          label = get_child(dependency, "label")
+          if not (label == None):
+            project = get_parent(others, "project")
+            if not (project == None):
+              temp = handle(context, label, tier, [dependency])
+              output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "dependencies", temp[1], context.variant.lower())).replace("\\", "/")
+            else:
+              context.report(node, "No \"project\" ancestor for \"dependency\" node with \"install\" substitution!\n")
+              result = False
+          else:
+            context.report(node, "No \"label\" descendant for \"dependency\" node with \"install\" substitution!\n")
+            result = False
+        else:
+          target = get_parent(others, "target")
+          if not (target == None):
+            label = get_child(target, "label")
+            if not (label == None):
+              project = get_parent(others, "project")
+              if not (project == None):
+                temp = handle(context, label, tier, [target])
+                output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "targets", temp[1], context.variant.lower())).replace("\\", "/")
+              else:
+                context.report(node, "No \"project\" ancestor for \"target\" node with \"install\" substitution!\n")
+                result = False
+            else:
+              context.report(node, "No \"label\" descendant for \"target\" node with \"install\" substitution!\n")
+              result = False
+          else:
+            project = get_parent(others, "project")
+            if not (project == None):
+              output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"])).replace("\\", "/")
+            else:
+              context.report(node, "No \"dependency\", \"target\", or \"project\" ancestor with \"install\" substitution!\n")
+              result = False
+        if (result):
+          context.report(node, "Substitution for \"install\" node was done as \""+output.strip()+"\" successfully!\n")
+      elif (tag == "origin"):
+        others = []+parents
+        if ("label" in node.attrib):
+          label = node.attrib["label"].strip()
+          if (label in context.labels):
+            others = get_parents(context.labels[label])
+        dependency = get_parent(others, "dependency")
+        if not (dependency == None):
+          local = get_child(dependency, "local")
+          if not (local == None):
+            temp = handle(context, get_child(local, "path"), tier, [local])
+            output = flatten(temp[1]).strip().replace("\\", "/")
+          else:
+            label = get_child(dependency, "label")
+            if not (label == None):
+              project = get_parent(others, "project")
+              if not (project == None):
+                temp = handle(context, label, tier, [dependency])
+                output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "build", "dependencies", temp[1].strip())).replace("\\", "/")
+              else:
+                context.report(node, "No \"project\" ancestor for \"dependency\" node with \"origin\" substitution!\n")
+                result = False
+            else:
+              context.report(node, "No \"label\" descendant for \"dependency\" node with \"origin\" substitution!\n")
+              result = False
+        else:
+          target = get_parent(others, "target")
+          if not (target == None):
+            label = get_child(target, "label")
+            if not (label == None):
+              project = get_parent(others, "project")
+              if not (project == None):
+                temp = handle(context, label, tier, [target])
+                output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], temp[1])).replace("\\", "/")
+              else:
+                context.report(node, "No \"project\" ancestor for \"target\" node with \"origin\" substitution!\n")
+                result = False
+            else:
+              context.report(node, "No \"label\" descendant for \"target\" node with \"origin\" substitution!\n")
+              result = False
+          else:
+            project = get_parent(others, "project")
+            if not (project == None):
+              output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"])).replace("\\", "/")
+            else:
+              context.report(node, "No \"dependency\", \"target\", or \"project\" ancestor with \"origin\" substitution!\n")
+              result = False
+        if (result):
+          context.report(node, "Substitution for \"origin\" node was done as \""+output.strip()+"\" successfully!\n")
       elif (tag == "link"):
         output = ensure(node.text)+flatten(output).strip()
         element = Link()
