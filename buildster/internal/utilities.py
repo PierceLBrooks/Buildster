@@ -268,6 +268,16 @@ def adjust(path):
           break
   return path
   
+def get_parents(node):
+  parents = []
+  if (node == None):
+    return parents
+  parent = node.parent
+  while not (parent == None):
+    parents.append(parent)
+    parent = parent.parent
+  return parents
+
 def get_parent(parents, tag):
   length = len(parents)
   if (length == 0):

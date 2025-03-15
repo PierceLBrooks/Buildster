@@ -728,7 +728,7 @@ def handle(context, node, tier, parents):
         element.string = String(output.strip())
         if not (parent == None):
           if not (element.getContent() in context.labels):
-            context.labels.append(element.getContent())
+            context.labels[element.getContent()] = element
           else:
             context.log(node, "Labels (\""+element.getContent()+"\") must be unique!\n")
             result = False
@@ -772,18 +772,11 @@ def handle(context, node, tier, parents):
           for label in elements["label"]:
             element.label = label
             if (label.getContent() in context.labels):
-              for i in range(len(context.labels)):
-                if (context.labels[i] == label.getContent()):
-                  if (i == 0):
-                    if (len(context.labels) > 1):
-                      context.labels = context.labels[1:]
-                    else:
-                      context.labels = []
-                    break
-                  if (i == len(context.labels)-1):
-                    context.labels = context.labels[:(len(context.labels)-1)]
-                    break
-                  context.labels = context.labels[:i]+context.labels[(i+1):]
+              keys = list(context.labels.keys())
+              for i in range(len(keys)):
+                key = keys[i]
+                if (key.strip() == label.getContent().strip()):
+                  del context.labels[key]
                   break
             break
           elements["label"] = None
@@ -797,18 +790,11 @@ def handle(context, node, tier, parents):
           for label in elements["label"]:
             element.label = label
             if (label.getContent() in context.labels):
-              for i in range(len(context.labels)):
-                if (context.labels[i] == label.getContent()):
-                  if (i == 0):
-                    if (len(context.labels) > 1):
-                      context.labels = context.labels[1:]
-                    else:
-                      context.labels = []
-                    break
-                  if (i == len(context.labels)-1):
-                    context.labels = context.labels[:(len(context.labels)-1)]
-                    break
-                  context.labels = context.labels[:i]+context.labels[(i+1):]
+              keys = list(context.labels.keys())
+              for i in range(len(keys)):
+                key = keys[i]
+                if (key.strip() == label.getContent().strip()):
+                  del context.labels[key]
                   break
             break
           elements["label"] = None
@@ -1056,6 +1042,12 @@ def handle(context, node, tier, parents):
       elif (tag == "unescape"):
         output = ensure(node.text)+flatten(output).strip()
         output = ast.literal_eval(F'"""{output.strip()}"""')
+      elif (tag == "base"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = os.path.basename(output.strip()).replace("\\", "/")
+      elif (tag == "directory"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = os.path.dirname(output.strip()).replace("\\", "/")
       elif (tag == "lower"):
         output = ensure(node.text)+flatten(output).strip()
         output = output.strip().lower()
@@ -1069,11 +1061,16 @@ def handle(context, node, tier, parents):
         output = ensure(node.text)+flatten(output).strip()
         output = base64.b64decode(output.strip().encode("ascii")).decode("ascii")
       elif (tag == "install"):
-        dependency = get_parent(parents, "dependency")
+        others = parents
+        if ("label" in node.attrib):
+          label = node.attrib["label"].strip()
+          if (label in context.labels):
+            others = get_parents(context.labels[label])
+        dependency = get_parent(others, "dependency")
         if not (dependency == None):
           label = get_child(dependency, "label")
           if not (label == None):
-            project = get_parent(parents, "project")
+            project = get_parent(others, "project")
             if not (project == None):
               temp = handle(context, label, tier, [dependency])
               output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "dependencies", temp[1], context.variant.lower())).replace("\\", "/")
@@ -1084,11 +1081,11 @@ def handle(context, node, tier, parents):
             context.report(node, "No \"label\" descendant for \"dependency\" node!\n")
             result = False
         else:
-          target = get_parent(parents, "target")
+          target = get_parent(others, "target")
           if not (target == None):
             label = get_child(target, "label")
             if not (label == None):
-              project = get_parent(parents, "project")
+              project = get_parent(others, "project")
               if not (project == None):
                 temp = handle(context, label, tier, [target])
                 output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "targets", temp[1], context.variant.lower())).replace("\\", "/")
@@ -1099,14 +1096,19 @@ def handle(context, node, tier, parents):
               context.report(node, "No \"label\" descendant for \"target\" node!\n")
               result = False
           else:
-            project = get_parent(parents, "project")
+            project = get_parent(others, "project")
             if not (project == None):
               output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"])).replace("\\", "/")
             else:
               context.report(node, "No \"dependency\", \"target\", or \"project\" ancestor for \"install\" node!\n")
               result = False
       elif (tag == "origin"):
-        dependency = get_parent(parents, "dependency")
+        others = parents
+        if ("label" in node.attrib):
+          label = node.attrib["label"].strip()
+          if (label in context.labels):
+            others = get_parents(context.labels[label])
+        dependency = get_parent(others, "dependency")
         if not (dependency == None):
           local = get_child(dependency, "local")
           if not (local == None):
@@ -1115,7 +1117,7 @@ def handle(context, node, tier, parents):
           else:
             label = get_child(dependency, "label")
             if not (label == None):
-              project = get_parent(parents, "project")
+              project = get_parent(others, "project")
               if not (project == None):
                 temp = handle(context, label, tier, [dependency])
                 output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "build", "dependencies", temp[1].strip())).replace("\\", "/")
@@ -1126,11 +1128,11 @@ def handle(context, node, tier, parents):
               context.report(node, "No \"label\" descendant for \"dependency\" node!\n")
               result = False
         else:
-          target = get_parent(parents, "target")
+          target = get_parent(others, "target")
           if not (target == None):
             label = get_child(target, "label")
             if not (label == None):
-              project = get_parent(parents, "project")
+              project = get_parent(others, "project")
               if not (project == None):
                 temp = handle(context, label, tier, [target])
                 output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], temp[1])).replace("\\", "/")
@@ -1141,7 +1143,7 @@ def handle(context, node, tier, parents):
               context.report(node, "No \"label\" descendant for \"target\" node!\n")
               result = False
           else:
-            project = get_parent(parents, "project")
+            project = get_parent(others, "project")
             if not (project == None):
               output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"])).replace("\\", "/")
             else:

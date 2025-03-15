@@ -115,6 +115,8 @@ class Context(Element):
     self.substitutes.append("decode")
     self.substitutes.append("escape")
     self.substitutes.append("unescape")
+    self.substitutes.append("base")
+    self.substitutes.append("directory")
     self.substitutes.append("lower")
     self.substitutes.append("upper")
     self.substitutes.append("exists")
@@ -241,6 +243,8 @@ class Context(Element):
     nodeTags.append("unescape")
     nodeTags.append("lower")
     nodeTags.append("upper")
+    nodeTags.append("base")
+    nodeTags.append("directory")
     for conditional in self.conditionals:
       if not (conditional in nodeTags):
         nodeTags.append(conditional)
@@ -266,6 +270,8 @@ class Context(Element):
       nodeParents[tag] = parents
       nodeAttributes[tag] = attributes
     
+    nodeParents["base"].append(self.any)
+    nodeParents["directory"].append(self.any)
     nodeParents["lower"].append(self.any)
     nodeParents["upper"].append(self.any)
     nodeParents["python"].append(self.any)
@@ -409,6 +415,8 @@ class Context(Element):
     nodeAttributes["post"].append(["timing", True])
     nodeAttributes["search"].append(["type", False])
     nodeAttributes["generator"].append(["architecture", True])
+    nodeAttributes["origin"].append(["label", True])
+    nodeAttributes["install"].append(["label", True])
     
     
     self.nodeTags = nodeTags
@@ -437,7 +445,7 @@ class Context(Element):
     self.logs = []
     self.records = []
     self.projects = []
-    self.labels = []
+    self.labels = {}
     self.environment = os.environ.copy()
     
     if not ("BUILDSTER_WD" in self.data):
