@@ -13,6 +13,7 @@ import logging
 import traceback
 import multiprocessing
 import xml.etree.ElementTree as xml_tree
+from copy import deepcopy
 
 try:
   from .internal import *
@@ -420,6 +421,7 @@ def handle(context, node, tier, parents):
       if not (element in context.projects):
         context.projects.append(element)
       context.project = element
+      context.project.node = node
       context.nodes[node] = element
       if not (context.root == None):
         element.parent = context.root
@@ -611,6 +613,13 @@ def handle(context, node, tier, parents):
           for dependency in elements["dependency"]:
             element.addDependency(dependency)
           elements["dependency"] = None
+        context.log(node, element.toString()+"\n")
+        project = get_parent(parents, "project")
+        if (parent == None):
+          project = context.project
+        context.nodes[node] = element
+        context.parents[node] = project
+        context.nodes[node].parent = context.parents[node]
       elif (tag == "dependency"):
         if ("local" in elements):
           for local in elements["local"]:
@@ -659,6 +668,12 @@ def handle(context, node, tier, parents):
             element.addTarget(target)
           elements["target"] = None
         context.log(node, element.toString()+"\n")
+        project = get_parent(parents, "project")
+        if (parent == None):
+          project = context.project
+        context.nodes[node] = element
+        context.parents[node] = project
+        context.nodes[node].parent = context.parents[node]
       elif (tag == "local"):
         if ("path" in elements):
           for path in elements["path"]:
@@ -1111,6 +1126,16 @@ def handle(context, node, tier, parents):
           label = node.attrib["label"].strip()
           if (label in context.labels):
             others = get_parents(context.labels[label])
+            for i in range(len(others)):
+              other = others[i]
+              if not ("xml" in str(type(other)).lower()):
+                others[i] = other.node
+            for i in range(len(deepcopy(others))):
+              other = others[i]
+              if (other in context.nodes):
+                if not (context.nodes[other].parent == None):
+                  if not (context.nodes[other].parent.node in others):
+                    others.append(context.nodes[other].parent.node)
         dependency = get_parent(others, "dependency")
         if not (dependency == None):
           label = get_child(dependency, "label")
@@ -1159,6 +1184,16 @@ def handle(context, node, tier, parents):
           label = node.attrib["label"].strip()
           if (label in context.labels):
             others = get_parents(context.labels[label])
+            for i in range(len(others)):
+              other = others[i]
+              if not ("xml" in str(type(other)).lower()):
+                others[i] = other.node
+            for i in range(len(deepcopy(others))):
+              other = others[i]
+              if (other in context.nodes):
+                if not (context.nodes[other].parent == None):
+                  if not (context.nodes[other].parent.node in others):
+                    others.append(context.nodes[other].parent.node)
         dependency = get_parent(others, "dependency")
         if not (dependency == None):
           local = get_child(dependency, "local")
@@ -1469,6 +1504,10 @@ def handle(context, node, tier, parents):
             parent = context.project.node
           elif ("target" in str(type(element)).lower()):
             parent = context.project.node
+          elif ("dependencylist" in str(type(element)).lower()):
+            parent = context.project.node
+          elif ("targetlist" in str(type(element)).lower()):
+            parent = context.project.node
         if not (parent == None):
           if (parent in context.nodes):
             element.parent = context.nodes[parent]
@@ -1565,6 +1604,21 @@ def run(target, data, environment):
       return False
     output = result[1]
     elements = result[2]
+    for key in context.parents:
+      if (key in context.nodes):
+        if not (context.nodes[key] == None):
+          parent = None
+          if ("xml" in str(type(context.nodes[key].parent)).lower()):
+            if (context.nodes[key].parent in context.nodes):
+              context.nodes[key].parent = context.nodes[context.nodes[key].parent]
+          if (context.parents[key] in context.nodes):
+            parents = get_parents(context.nodes[key])
+            if (len(parents) == 0):
+              parent = context.nodes[context.parents[key]]
+              if (context.nodes[key].parent == None):
+                context.nodes[key].parent = parent
+            else:
+              parent = parents[len(parents)-1]
     if not (context.build(context, variant)):
       context.report()
       return False
