@@ -1116,6 +1116,8 @@ def handle(context, node, tier, parents):
           label = get_child(dependency, "label")
           if not (label == None):
             project = get_parent(others, "project")
+            if (project == None):
+              project = context.project
             if not (project == None):
               temp = handle(context, label, tier, [dependency])
               output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "dependencies", temp[1], context.variant.lower())).replace("\\", "/")
@@ -1131,6 +1133,8 @@ def handle(context, node, tier, parents):
             label = get_child(target, "label")
             if not (label == None):
               project = get_parent(others, "project")
+              if (project == None):
+                project = context.project
               if not (project == None):
                 temp = handle(context, label, tier, [target])
                 output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "targets", temp[1], context.variant.lower())).replace("\\", "/")
@@ -1165,6 +1169,8 @@ def handle(context, node, tier, parents):
             label = get_child(dependency, "label")
             if not (label == None):
               project = get_parent(others, "project")
+              if (project == None):
+                project = context.project
               if not (project == None):
                 temp = handle(context, label, tier, [dependency])
                 output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "build", "dependencies", temp[1].strip())).replace("\\", "/")
@@ -1180,6 +1186,8 @@ def handle(context, node, tier, parents):
             label = get_child(target, "label")
             if not (label == None):
               project = get_parent(others, "project")
+              if (project == None):
+                project = context.project
               if not (project == None):
                 temp = handle(context, label, tier, [target])
                 output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], temp[1])).replace("\\", "/")
