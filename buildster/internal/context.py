@@ -446,6 +446,7 @@ class Context(Element):
     self.records = []
     self.projects = []
     self.labels = {}
+    self.parents = {}
     self.environment = os.environ.copy()
     
     if not ("BUILDSTER_WD" in self.data):

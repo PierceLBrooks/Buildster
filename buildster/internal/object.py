@@ -6,9 +6,13 @@
 class Object(object):
   def __init__(self):
     self.node = None
+    self.parent = None
     
   def getContent(self):
     return ""
+    
+  def getParent(self):
+    return self.parent
     
   def toString(self, *arguments):
     if (len(arguments) == 0):

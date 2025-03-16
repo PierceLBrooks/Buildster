@@ -171,6 +171,8 @@ def handle(context, node, tier, parents):
     return null
   tag = node.tag.lower()
   context.tier = tier
+  if not (node in context.parents):
+    context.parents[node] = parent
   context.log(node, tag)
   #context.log(node, "NODE_BEGIN\n")
   if (context.check(node, parent, parents)):
@@ -293,7 +295,7 @@ def handle(context, node, tier, parents):
                   return null
                 return [result, output, elements]
           else:
-            context.report(node, "No \"exists\" descendant for \"if_exists\" node!\n")
+            context.record(node, "No \"exists\" descendant for \"if_exists\" node!\n")
             return null
       elif (tag == "switch"):
         id = node.attrib["id"]
@@ -389,7 +391,7 @@ def handle(context, node, tier, parents):
                 context.log(node, str(id)+" does match \""+exists+"\" check for else case!")
                 return null
           else:
-            context.report(node, "No \"exists\" descendant for \"if_exists\" node!\n")
+            context.record(node, "No \"exists\" descendant for \"if_exists\" node!\n")
             return null
         else:
           return null
@@ -418,6 +420,10 @@ def handle(context, node, tier, parents):
       if not (element in context.projects):
         context.projects.append(element)
       context.project = element
+      context.nodes[node] = element
+      if not (context.root == None):
+        element.parent = context.root
+        context.parents[node] = context.root.node
     elif (tag == "dependencies"):
       element = DependencyList()
     elif (tag == "targets"):
@@ -616,6 +622,8 @@ def handle(context, node, tier, parents):
             element = remote
             break
           elements["remote"] = None
+        if (element == None):
+          context.record(node, "Dependency polymorphism resolution failure!")
         if ("subpath" in elements):
           for subpath in elements["subpath"]:
             element.subpath = subpath
@@ -642,6 +650,9 @@ def handle(context, node, tier, parents):
             break
           elements["exports"] = None
         context.log(node, element.toString()+"\n")
+        context.nodes[node] = element
+        context.parents[node] = get_parent(parents, "dependencies")
+        context.nodes[node].parent = context.parents[node]
       elif (tag == "targets"):
         if ("target" in elements):
           for target in elements["target"]:
@@ -728,6 +739,7 @@ def handle(context, node, tier, parents):
         element.string = String(output.strip())
         if not (parent == None):
           if not (element.getContent() in context.labels):
+            context.nodes[node] = element
             context.labels[element.getContent()] = element
           else:
             context.log(node, "Labels (\""+element.getContent()+"\") must be unique!\n")
@@ -1108,10 +1120,10 @@ def handle(context, node, tier, parents):
               temp = handle(context, label, tier, [dependency])
               output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "dependencies", temp[1], context.variant.lower())).replace("\\", "/")
             else:
-              context.report(node, "No \"project\" ancestor for \"dependency\" node with \"install\" substitution!\n")
+              context.record(node, "No \"project\" ancestor for \"dependency\" node with \"install\" substitution!\n")
               result = False
           else:
-            context.report(node, "No \"label\" descendant for \"dependency\" node with \"install\" substitution!\n")
+            context.record(node, "No \"label\" descendant for \"dependency\" node with \"install\" substitution!\n")
             result = False
         else:
           target = get_parent(others, "target")
@@ -1123,20 +1135,20 @@ def handle(context, node, tier, parents):
                 temp = handle(context, label, tier, [target])
                 output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "install", "targets", temp[1], context.variant.lower())).replace("\\", "/")
               else:
-                context.report(node, "No \"project\" ancestor for \"target\" node with \"install\" substitution!\n")
+                context.record(node, "No \"project\" ancestor for \"target\" node with \"install\" substitution!\n")
                 result = False
             else:
-              context.report(node, "No \"label\" descendant for \"target\" node with \"install\" substitution!\n")
+              context.record(node, "No \"label\" descendant for \"target\" node with \"install\" substitution!\n")
               result = False
           else:
             project = get_parent(others, "project")
             if not (project == None):
               output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"])).replace("\\", "/")
             else:
-              context.report(node, "No \"dependency\", \"target\", or \"project\" ancestor with \"install\" substitution!\n")
+              context.record(node, "No \"dependency\", \"target\", or \"project\" ancestor with \"install\" substitution!\n")
               result = False
         if (result):
-          context.report(node, "Substitution for \"install\" node was done as \""+output.strip()+"\" successfully!\n")
+          context.record(node, "Substitution for \"install\" node was done as \""+output.strip()+"\" successfully!\n")
       elif (tag == "origin"):
         others = []+parents
         if ("label" in node.attrib):
@@ -1157,10 +1169,10 @@ def handle(context, node, tier, parents):
                 temp = handle(context, label, tier, [dependency])
                 output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], "build", "dependencies", temp[1].strip())).replace("\\", "/")
               else:
-                context.report(node, "No \"project\" ancestor for \"dependency\" node with \"origin\" substitution!\n")
+                context.record(node, "No \"project\" ancestor for \"dependency\" node with \"origin\" substitution!\n")
                 result = False
             else:
-              context.report(node, "No \"label\" descendant for \"dependency\" node with \"origin\" substitution!\n")
+              context.record(node, "No \"label\" descendant for \"dependency\" node with \"origin\" substitution!\n")
               result = False
         else:
           target = get_parent(others, "target")
@@ -1172,20 +1184,20 @@ def handle(context, node, tier, parents):
                 temp = handle(context, label, tier, [target])
                 output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"], temp[1])).replace("\\", "/")
               else:
-                context.report(node, "No \"project\" ancestor for \"target\" node with \"origin\" substitution!\n")
+                context.record(node, "No \"project\" ancestor for \"target\" node with \"origin\" substitution!\n")
                 result = False
             else:
-              context.report(node, "No \"label\" descendant for \"target\" node with \"origin\" substitution!\n")
+              context.record(node, "No \"label\" descendant for \"target\" node with \"origin\" substitution!\n")
               result = False
           else:
             project = get_parent(others, "project")
             if not (project == None):
               output = adjust(os.path.join(wd(), context.root.directory.getContent(), project.attrib["directory"])).replace("\\", "/")
             else:
-              context.report(node, "No \"dependency\", \"target\", or \"project\" ancestor with \"origin\" substitution!\n")
+              context.record(node, "No \"dependency\", \"target\", or \"project\" ancestor with \"origin\" substitution!\n")
               result = False
         if (result):
-          context.report(node, "Substitution for \"origin\" node was done as \""+output.strip()+"\" successfully!\n")
+          context.record(node, "Substitution for \"origin\" node was done as \""+output.strip()+"\" successfully!\n")
       elif (tag == "link"):
         output = ensure(node.text)+flatten(output).strip()
         element = Link()
@@ -1352,6 +1364,9 @@ def handle(context, node, tier, parents):
             break
           elements["post"] = None
         context.log(node, element.toString()+"\n")
+        context.nodes[node] = element
+        context.parents[node] = get_parent(parents, "targets")
+        context.nodes[node].parent = context.parents[node]
       elif (tag == "export"):
         if ("type" in node.attrib):
           element.export = String(node.attrib["type"])
@@ -1428,17 +1443,72 @@ def handle(context, node, tier, parents):
   else:
     result = False
   if not (context.error == None):
-    context.report(node, str(context.error))
+    context.record(node, str(context.error))
     result = False
   if not (result):
     context.log(node, "Error!")
   else:
-    context.nodes[node] = element
+    if not (node in context.nodes):
+      context.nodes[node] = element
     if not (element == None):
-      parent = get_parent(parents, None)
-      if (parent in context.nodes):
-        element.parent = context.nodes[parent]
+      if (element.parent == None):
+        parent = get_parent(parents, None)
+        if (parent in context.nodes):
+          element.parent = context.nodes[parent]
+        else:
+          parent = None
+          if ("dependency" in str(type(element)).lower()):
+            parent = context.project.node
+          elif ("target" in str(type(element)).lower()):
+            parent = context.project.node
+        if not (parent == None):
+          if (parent in context.nodes):
+            element.parent = context.nodes[parent]
   #context.log(node, "NODE_END\n")
+  for key in context.parents:
+    if (key in context.nodes):
+      if not (context.nodes[key] == None):
+        parent = None
+        if ("xml" in str(type(context.nodes[key].parent)).lower()):
+          if (context.nodes[key].parent in context.nodes):
+            context.nodes[key].parent = context.nodes[context.nodes[key].parent]
+        if (context.parents[key] in context.nodes):
+          parents = get_parents(context.nodes[key])
+          if (len(parents) == 0):
+            parent = context.nodes[context.parents[key]]
+            if (context.nodes[key].parent == None):
+              context.nodes[key].parent = parent
+          else:
+            parent = parents[len(parents)-1]
+        """
+        if ((context.nodes[key].parent == None) or not ("project" in str(type(parent)).lower())):
+          parent = None
+          if ("dependency" in str(type(context.nodes[key])).lower()):
+            parent = context.project.node
+          elif ("target" in str(type(context.nodes[key])).lower()):
+            parent = context.project.node
+          else:
+            parent = get_child(context.nodes[key].node, "dependency")
+            if not (parent == None):
+              if ("dependency" in str(type(parent)).lower()):
+                parent = context.project.node
+              elif ("target" in str(type(parent)).lower()):
+                parent = context.project.node
+              else:
+                parent = None
+            else:
+              parent = get_child(context.nodes[key].node, "target")
+              if not (parent == None):
+                if ("dependency" in str(type(parent)).lower()):
+                  parent = context.project.node
+                elif ("target" in str(type(parent)).lower()):
+                  parent = context.project.node
+                else:
+                  parent = None
+          if not (parent == None):
+            if (parent in context.nodes):
+              context.nodes[key].parent = context.nodes[parent]
+        """
   return [result, output, elements]
 
 def run(target, data, environment):
@@ -1469,6 +1539,8 @@ def run(target, data, environment):
       context.root.node = base
       context.root.context = context
       context.root.directory = Path(String(base.attrib["directory"]))
+      context.nodes[base] = context.root
+      context.parents[base] = None
     for child in base:
       if (child.tag == "project"):
         context.project = Project()
@@ -1476,6 +1548,8 @@ def run(target, data, environment):
         context.project.context = context
         if ("directory" in child.attrib):
           context.project.diretory = Path(String(child.attrib["directory"]))
+        context.nodes[child] = context.project
+        context.parents[child] = base
         break
     result = handle(context, base, 0, [None])
     if not (result[0]):

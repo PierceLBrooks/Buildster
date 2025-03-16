@@ -10,7 +10,6 @@ from .utilities import *
 class Element(Object):
   def __init__(self):
     super(Element, self).__init__()
-    self.parent = None
     
   def build(self, owner, variant):
     return True
@@ -26,9 +25,6 @@ class Element(Object):
     if not (move(source, destination)):
       return False
     return True
-    
-  def getParent(self):
-    return self.parent
     
   def getContent(self):
     return ""

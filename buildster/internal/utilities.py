@@ -274,7 +274,14 @@ def get_parents(node):
     return parents
   parent = node.parent
   while not (parent == None):
-    parents.append(parent)
+    if ("xml" in str(type(parent))):
+      parents.append(parent)
+      break
+    if (parent.node == None):
+      break
+    if (parent.node in parents):
+      break
+    parents.append(parent.node)
     parent = parent.parent
   return parents
 
