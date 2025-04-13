@@ -10,6 +10,7 @@ import shlex
 import base64
 import pathlib
 import logging
+import tempfile
 import traceback
 import multiprocessing
 import xml.etree.ElementTree as xml_tree
@@ -1055,6 +1056,8 @@ def handle(context, node, tier, parents):
         output = str(multiprocessing.cpu_count())
       elif (tag == "home"):
         output = str(pathlib.Path.home()).replace("\\", "/")
+      elif (tag == "temporary"):
+        output = str(tempfile.gettempdir()).replace("\\", "/")
       elif (tag == "execute"):
         output = ensure(node.text)+flatten(output).strip()
         command = shlex.split(output.strip())
