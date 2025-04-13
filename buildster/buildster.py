@@ -10,10 +10,12 @@ import shlex
 import base64
 import pathlib
 import logging
+import requests
 import tempfile
 import traceback
 import multiprocessing
 import xml.etree.ElementTree as xml_tree
+from urllib.parse import urlparse
 from copy import deepcopy
 
 try:
@@ -1579,9 +1581,44 @@ def run(target, data, environment):
         continue
     for key in environment:
       dictionary[key] = environment[key]
+    if ((target.startswith("http://")) or (target.startswith("https://"))):
+      final = ""
+      try:
+        parse = urlparse(target)
+        if (parse.path.endswith(".xml")):
+          final += os.path.join(os.getcwd(), os.path.basename(parse.path))
+      except:
+        final = ""
+        if (sys.flags.debug):
+          logging.error(traceback.format_exc())
+      if (len(final) == 0):
+        return False
+      if not (os.path.exists(final)):
+        try:
+          request = requests.get(target, stream=True)
+          if (str(request.status_code).strip() == "200"):
+            descriptor = open(final, "wb")
+            for chunk in request:
+              descriptor.write(chunk)
+            descriptor.close()
+        except:
+          if (sys.flags.debug):
+            logging.error(traceback.format_exc())
+          try:
+            os.unlink(final)
+          except:
+            if (sys.flags.debug):
+              logging.error(traceback.format_exc())
+      target = final
+    if not (os.path.exists(target)):
+      if (sys.flags.debug):
+        print(target)
+      return False
     tree = xml_tree.parse(target)
     base = tree.getroot()
     if not (base.tag == "buildster"):
+      if (sys.flags.debug):
+        print(base.tag)
       return False
     context = Context(dictionary, variant)
     if ("directory" in base.attrib):
