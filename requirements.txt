@@ -1,5 +1,6 @@
 patool>=1.12
 pyunpack>=0.1.1
 packaging>=23.0
+requests-testadapter>=0.3.0
 pypatchelf>=0.9;platform_system=='Linux'
 

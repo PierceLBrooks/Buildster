@@ -8,6 +8,7 @@ import sys
 import json
 import shlex
 import base64
+import hashlib
 import pathlib
 import logging
 import requests
@@ -15,6 +16,7 @@ import tempfile
 import traceback
 import multiprocessing
 import xml.etree.ElementTree as xml_tree
+from requests_testadapter import Resp
 from urllib.parse import urlparse
 from copy import deepcopy
 
@@ -162,6 +164,20 @@ except:
   from internal.project import Project
   from internal.base import Buildster
   from internal.context import Context
+
+# https://stackoverflow.com/a/22989322
+class LocalFileAdapter(requests.adapters.HTTPAdapter):
+  def build_response_from_file(self, request):
+    file_path = request.url[7:]
+    with open(file_path, "rb") as file:
+        buff = bytearray(os.path.getsize(file_path))
+        file.readinto(buff)
+        resp = Resp(buff)
+        r = self.build_response(request, resp)
+        return r
+
+  def send(self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None):
+      return self.build_response_from_file(request)
 
 def handle(context, node, tier, parents):
   parent = parents[len(parents)-1]
@@ -1080,6 +1096,18 @@ def handle(context, node, tier, parents):
       elif (tag == "directory"):
         output = ensure(node.text)+flatten(output).strip()
         output = os.path.dirname(output.strip()).replace("\\", "/")
+      elif (tag == "md5"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = hashlib.md5().update(output.encode()).hexdigest()
+      elif (tag == "sha1"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = hashlib.sha1().update(output.encode()).hexdigest()
+      elif ((tag == "sha256") or (tag == "hash")):
+        output = ensure(node.text)+flatten(output).strip()
+        output = hashlib.sha256().update(output.encode()).hexdigest()
+      elif (tag == "sha512"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = hashlib.sha512().update(output.encode()).hexdigest()
       elif (tag == "lower"):
         output = ensure(node.text)+flatten(output).strip()
         output = output.strip().lower()
@@ -1581,7 +1609,7 @@ def run(target, data, environment):
         continue
     for key in environment:
       dictionary[key] = environment[key]
-    if ((target.startswith("http://")) or (target.startswith("https://"))):
+    if ((target.startswith("http://")) or (target.startswith("https://")) or (target.startswith("file://"))):
       final = ""
       try:
         parse = urlparse(target)
@@ -1595,7 +1623,9 @@ def run(target, data, environment):
         return False
       if not (os.path.exists(final)):
         try:
-          request = requests.get(target, stream=True)
+          session = requests.session()
+          session.mount("file://", LocalFileAdapter())
+          request = session.get(target, stream=True)
           if (str(request.status_code).strip() == "200"):
             descriptor = open(final, "wb")
             for chunk in request:

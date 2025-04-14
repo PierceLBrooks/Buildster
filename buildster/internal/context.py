@@ -120,6 +120,11 @@ class Context(Element):
     self.substitutes.append("directory")
     self.substitutes.append("lower")
     self.substitutes.append("upper")
+    self.substitutes.append("hash")
+    self.substitutes.append("md5")
+    self.substitutes.append("sha1")
+    self.substitutes.append("sha256")
+    self.substitutes.append("sha512")
     self.substitutes.append("exists")
     
     self.conditionals = []
@@ -243,6 +248,11 @@ class Context(Element):
     nodeTags.append("decode")
     nodeTags.append("escape")
     nodeTags.append("unescape")
+    nodeTags.append("sha512")
+    nodeTags.append("sha256")
+    nodeTags.append("sha1")
+    nodeTags.append("md5")
+    nodeTags.append("hash") # alias for sha256 :P
     nodeTags.append("lower")
     nodeTags.append("upper")
     nodeTags.append("base")
@@ -274,6 +284,11 @@ class Context(Element):
     
     nodeParents["base"].append(self.any)
     nodeParents["directory"].append(self.any)
+    nodeParents["sha512"].append(self.any)
+    nodeParents["sha256"].append(self.any)
+    nodeParents["sha1"].append(self.any)
+    nodeParents["md5"].append(self.any)
+    nodeParents["hash"].append(self.any)
     nodeParents["lower"].append(self.any)
     nodeParents["upper"].append(self.any)
     nodeParents["python"].append(self.any)

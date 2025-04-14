@@ -28,6 +28,7 @@ except:
 requirements = []
 requirements.append("patool")
 requirements.append("pyunpack")
+requirements.append("requests-testadapter")
 if (platform.system().lower() == "linux"):
     requirements.append("pypatchelf")
 setup(name="buildster",
