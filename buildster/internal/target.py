@@ -11,6 +11,7 @@ from .build import Build
 from .string import String
 from .generator import Generator
 from .label import Label
+from .parallel import Parallel
 from .argument_list import ArgumentList
 from .native_list import NativeList
 from .exception_list import ExceptionList
@@ -25,8 +26,30 @@ from .build_instruction import PostBuildInstruction
 
 from .utilities import *
 
+XCODE_PREAMBLE = """
+if ("${CMAKE_GENERATOR}" STREQUAL "Xcode")
+    execute_process(COMMAND uname -m OUTPUT_VARIABLE BUILDSTER_UNAME ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (NOT "$ENV{BUILDSTER_SYSROOT}" STREQUAL "")
+        set(SYSROOT "$ENV{BUILDSTER_SYSROOT}")
+    else()
+        execute_process(COMMAND xcodebuild -version -sdk macosx Path OUTPUT_VARIABLE BUILDSTER_SYSROOT ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+    endif()
+    if (NOT EXISTS "${BUILDSTER_SYSROOT}")
+        message(FATAL_ERROR "BUILDSTER_SYSROOT does not exist!")
+    endif()
+    set(CMAKE_OSX_SYSROOT "${BUILDSTER_SYSROOT}")
+    if ("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "")
+        if ("${BUILDSTER_UNAME}" MATCHES "arm")
+            set(CMAKE_OSX_ARCHITECTURES "arm64")
+        else()
+            set(CMAKE_OSX_ARCHITECTURES "$(ARCHS_STANDARD)")
+        endif()
+    endif()
+endif()
+"""
+
 class Target(Build):
-  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None, modules = None, exceptions = None, natives = None, linkage = None):
+  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None, modules = None, exceptions = None, natives = None, linkage = None, parallel = None):
     super(Target, self).__init__()
     self.label = None
     self.subpath = None
@@ -70,12 +93,15 @@ class Target(Build):
     self.natives = None
     if (type(natives) == NativeList):
       self.natives = natives
+    self.parallel = None
+    if (type(parallel) == Parallel):
+      self.parallel = parallel
     self.linkage = None
     if (type(linkage) == String):
       self.linkage = linkage
       
-  def install(self, owner, path, installation, variant, natives):
-    result = cmake_install(path, variant, installation, natives)
+  def install(self, owner, path, installation, variant, natives, parallel):
+    result = cmake_install(owner.getContext(), path, variant, installation, natives, parallel)
     owner.getContext().log(self.node, result)
     return True
     
@@ -166,7 +192,7 @@ class Target(Build):
       return False
     if not (os.path.isdir(path)):
       if (contains(wd(), path)):
-        os.makedirs(path)
+        os.makedirs(path, exist_ok=True)
     if not (self.packages == None):
       packages = packages+self.packages.content
     if not (self.modules == None):
@@ -196,7 +222,19 @@ class Target(Build):
                 else:
                   cmake_modules = cmake_modules.replace("\\", "/")
                 write(descriptor, "set(CMAKE_MODULE_PATH \""+cmake_modules+"\")")
-      write(descriptor, "project(\""+self.label.getContent()+"Project\")")
+      write(descriptor, "set(BUILDSTER_LANGUAGES )")
+      write(descriptor, "list(APPEND BUILDSTER_LANGUAGES C)")
+      write(descriptor, "list(APPEND BUILDSTER_LANGUAGES CXX)")
+      if (platform.system() == "Darwin"):
+        write(descriptor, "list(APPEND BUILDSTER_LANGUAGES OBJC)")
+        write(descriptor, "list(APPEND BUILDSTER_LANGUAGES OBJCXX)")
+        write(descriptor, "list(APPEND BUILDSTER_LANGUAGES Swift)")
+        lines = XCODE_PREAMBLE.strip().split("\n")
+        for line in lines:
+          write(descriptor, line.strip())
+      elif (platform.system() == "Windows"):
+        write(descriptor, "list(APPEND BUILDSTER_LANGUAGES CSharp)")
+      write(descriptor, "project(\""+self.label.getContent()+"Project\" LANGUAGES ${BUILDSTER_LANGUAGES})")
       write(descriptor, "set(BUILDSTER_HEADERS )")
       write(descriptor, "set(BUILDSTER_FILES )")
       for i in range(len(arguments)):
@@ -288,7 +326,7 @@ class Target(Build):
           if not (os.path.isdir(headers)):
             if (contains(wd(), headers)):
               try:
-                os.makedirs(headers)
+                os.makedirs(headers, exist_ok=True)
               except:
                 pass
           if (contains(wd(), headers)):
@@ -300,7 +338,7 @@ class Target(Build):
           if not (os.path.isdir(libraries)):
             if (contains(wd(), libraries)):
               try:
-                os.makedirs(libraries)
+                os.makedirs(libraries, exist_ok=True)
               except:
                 pass
           for root, folders, files in os.walk(libraries):
@@ -536,6 +574,7 @@ class Target(Build):
 
   def buildVariant(self, owner, generator, architecture, arguments, path, installation, variant):
     natives = None
+    parallel = None
     if not (self.natives == None):
       natives = self.natives.getContent()
       for i in range(len(natives)):
@@ -544,6 +583,8 @@ class Target(Build):
           natives[i] = None
       while (None in natives):
         natives.remove(None)
+    if not (self.parallel == None):
+      parallel = self.parallel.getContent()
     files = self.getFiles(owner, "CMakeLists\\.txt")
     temp = ""
     subpath = "."
@@ -555,9 +596,9 @@ class Target(Build):
       temp += os.path.realpath(os.path.join(path, "build", variant.lower())).replace("\\", "/")
     result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.realpath(os.path.join(path, subpath)).replace("\\", "/"), temp, installation, None)
     owner.getContext().log(self.node, result)
-    result = cmake_build(temp, variant, natives)
+    result = cmake_build(owner.getContext(), temp, variant, natives, parallel)
     owner.getContext().log(self.node, result)
-    success = self.install(owner, temp, installation.replace("\\", "/"), variant, natives)
+    success = self.install(owner, temp, installation.replace("\\", "/"), variant, natives, parallel)
     return success
     
   def distribute(self, owner, distribution, variant):

@@ -19,6 +19,8 @@ class Writer(Performer):
       self.content = content
       
   def getContent(self):
+    if (self.destination == None):
+      return ""
     return self.destination.getContent()
     
   def perform(self, context):

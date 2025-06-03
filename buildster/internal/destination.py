@@ -14,6 +14,8 @@ class Destination(Object):
       self.path = path
       
   def getContent(self):
+    if (self.path == None):
+      return ""
     return self.path.getContent()
     
   def __str__(self):

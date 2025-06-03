@@ -24,7 +24,7 @@ class CommandBuildInstruction(BuildInstruction):
     try:
       if not (os.path.isdir(subpath)):
         if (contains(wd(), subpath)):
-          os.makedirs(subpath)
+          os.makedirs(subpath, exist_ok=True)
     except:
       pass
     if not (len(self.extracts) == 0):

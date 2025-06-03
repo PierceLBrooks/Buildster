@@ -6,12 +6,13 @@ import os
 from .generator import Generator
 from .path import Path
 from .native_list import NativeList
+from .parallel import Parallel
 from .build_instruction import BuildInstruction
 
 from .utilities import *
 
 class CmakeBuildInstruction(BuildInstruction):
-  def __init__(self, arguments = None, generator = None, source = None, natives = None):
+  def __init__(self, arguments = None, generator = None, source = None, natives = None, parallel = None):
     super(CmakeBuildInstruction, self).__init__(arguments)
     self.generator = None
     if (type(generator) == Generator):
@@ -22,6 +23,9 @@ class CmakeBuildInstruction(BuildInstruction):
     self.natives = None
     if (type(natives) == NativeList):
       self.natives = natives
+    self.parallel = None
+    if (type(parallel) == Parallel):
+      self.parallel = parallel
       
   def build(self, owner, path, subpath, installation, imports, variant):
     if (self.generator == None):
@@ -64,6 +68,7 @@ class CmakeBuildInstruction(BuildInstruction):
     return True
 
   def buildVariant(self, owner, arguments, cmake, installation, variant):
+    parallel = None
     natives = None
     generator = None
     architecture = None
@@ -79,10 +84,12 @@ class CmakeBuildInstruction(BuildInstruction):
           natives[i] = None
       while (None in natives):
         natives.remove(None)
+    if not (self.parallel == None):
+      parallel = self.parallel.getContent()
     path = os.path.join(cmake, variant.lower()).replace("\\", "/")
     result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, "..", self.source.getContent()).replace("\\", "/"), path, installation, variant)
     owner.getContext().log(self.node, result)
-    result = cmake_build(os.path.join(cmake, variant.lower()).replace("\\", "/"), variant, natives)
+    result = cmake_build(owner.getContext(), os.path.join(cmake, variant.lower()).replace("\\", "/"), variant, natives, parallel)
     owner.getContext().log(self.node, result)
     return True
     
@@ -93,6 +100,7 @@ class CmakeBuildInstruction(BuildInstruction):
     return True
 
   def installVariant(self, owner, cmake, installation, variant):
+    parallel = None
     natives = None
     if not (self.natives == None):
       natives = self.natives.getContent()
@@ -102,10 +110,12 @@ class CmakeBuildInstruction(BuildInstruction):
           natives[i] = None
       while (None in natives):
         natives.remove(None)
-    result = cmake_install(os.path.join(cmake, variant.lower()).replace("\\", "/"), variant, os.path.join(installation, variant.lower()).replace("\\", "/"), natives)
+    if not (self.parallel == None):
+      parallel = self.parallel.getContent()
+    result = cmake_install(owner.getContext(), os.path.join(cmake, variant.lower()).replace("\\", "/"), variant, os.path.join(installation, variant.lower()).replace("\\", "/"), natives, parallel)
     owner.getContext().log(self.node, result)
     return True
     
   def __str__(self):
-    return "<"+self.toString(self.arguments)+", "+self.toString(self.generator)+", "+self.toString(self.source)+">"
+    return "<"+self.toString(self.arguments)+", "+self.toString(self.generator)+", "+self.toString(self.source)+", "+self.toString(self.natives)+", "+self.toString(self.parallel)+">"
     

@@ -41,28 +41,28 @@ class Project(Element):
     if not (path == None):
       if not (os.path.exists(path)):
         if (contains(wd(), path)):
-          os.makedirs(path)
+          os.makedirs(path, exist_ok=True)
     path = None
     if not (self.directory == None):
       path = os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "build", "targets")
     if not (path == None):
       if not (os.path.exists(path)):
         if (contains(wd(), path)):
-          os.makedirs(path)
+          os.makedirs(path, exist_ok=True)
     path = None
     if not (self.directory == None):
       path = os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "install", "dependencies")
     if not (path == None):
       if not (os.path.exists(path)):
         if (contains(wd(), path)):
-          os.makedirs(path)
+          os.makedirs(path, exist_ok=True)
     path = None
     if not (self.directory == None):
       path = os.path.join(wd(), self.getContext().root.directory.getContent(), self.directory.getContent(), "install", "targets")
     if not (path == None):
       if not (os.path.exists(path)):
         if (contains(wd(), path)):
-          os.makedirs(path)
+          os.makedirs(path, exist_ok=True)
     if (self.pre == None):
       return True
     if not (self.pre.timing == None):
@@ -105,7 +105,7 @@ class Project(Element):
     self.owner = owner
     path = os.path.join(distribution, variant.lower()).replace("\\", "/")
     if not (os.path.isdir(path)):
-      os.makedirs(path)
+      os.makedirs(path, exist_ok=True)
     if not (self.dependencies == None):
       if not (self.dependencies.distribute(self, distribution, variant)):
         self.context.log(self.node, "Dependency list distribution failure!")

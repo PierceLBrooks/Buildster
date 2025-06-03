@@ -22,6 +22,8 @@ class Module(Element):
     return True
     
   def getContent(self):
+    if (self.label == None):
+      return ""
     return self.label.getContent()
     
   def __str__(self):

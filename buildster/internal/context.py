@@ -2,7 +2,9 @@
 # Author: Pierce Brooks
 
 import os
+import sys
 import copy
+import struct
 import platform
 import traceback
 from datetime import datetime
@@ -69,6 +71,7 @@ class Context(Element):
     self.sources.append("c++")
     self.sources.append("cs")
     self.sources.append("m")
+    self.sources.append("mm")
     self.sources.append("objc")
     self.sources.append("swift")
     
@@ -257,6 +260,7 @@ class Context(Element):
     nodeTags.append("upper")
     nodeTags.append("base")
     nodeTags.append("directory")
+    nodeTags.append("parallel")
     for conditional in self.conditionals:
       if not (conditional in nodeTags):
         nodeTags.append(conditional)
@@ -411,6 +415,8 @@ class Context(Element):
     nodeParents["hint"].append("hints")
     nodeParents["components"].append("package")
     nodeParents["component"].append("components")
+    nodeParents["parallel"].append("cmake")
+    nodeParents["parallel"].append("target")
     
     nodeAttributes["json"].append(["key", False])
     nodeAttributes["data"].append(["id", False])
@@ -477,6 +483,18 @@ class Context(Element):
       self.data["BUILDSTER_VARIANT"] = self.variant
     if not ("BUILDSTER_ARCH" in self.data):
       self.data["BUILDSTER_ARCH"] = platform.machine().lower()
+    if not ("BUILDSTER_ENDIAN" in self.data):
+      self.data["BUILDSTER_ENDIAN"] = sys.byteorder
+    if not ("BUILDSTER_64" in self.data):
+      if (struct.calcsize("P") > 4):
+        self.data["BUILDSTER_64"] = "true"
+      else:
+        self.data["BUILDSTER_64"] = "false"
+    if not ("BUILDSTER_32" in self.data):
+      if (struct.calcsize("P") < 8):
+        self.data["BUILDSTER_32"] = "true"
+      else:
+        self.data["BUILDSTER_32"] = "false"
     
   def build(self, owner, variant):
     self.tier = None

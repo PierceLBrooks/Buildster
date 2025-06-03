@@ -30,7 +30,7 @@ class WGetDependency(RemoteDependency):
       return False
     if not (os.path.isdir(path)):
       if (contains(wd(), path)):
-        os.makedirs(path)
+        os.makedirs(path, exist_ok=True)
     success = True
     if not (os.path.exists(os.path.join(path, content))):
       if not (retrieve(owner.getContext(), self.url.getContent(), os.path.join(path, content))):

@@ -21,6 +21,8 @@ class Variable(Element):
     return True
     
   def getContent(self):
+    if (self.key == None):
+      return ""
     return self.key.getContent()
     
   def __str__(self):
