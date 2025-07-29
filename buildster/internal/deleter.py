@@ -3,6 +3,7 @@
 
 import os
 import shutil
+import pathlib
 
 from .performer import Performer
 from .path import Path
@@ -30,10 +31,13 @@ class Deleter(Performer):
     if not (os.path.exists(content)):
       context.log(None, "Deleted \""+self.toString(self.path)+"\"!")
       return True
-    if (os.path.isfile(content)):
-      os.unlink(content)
-    else:
-      shutil.rmtree(content)
+    try:
+      if (os.path.isfile(content)):
+        pathlib.Path.unlink(content)
+      else:
+        shutil.rmtree(content)
+    except:
+      pass
     context.log(None, "Deleted \""+self.toString(self.path)+"\"!")
     return True
     
