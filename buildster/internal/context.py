@@ -14,7 +14,7 @@ from .element import Element
 from .utilities import *
 
 class Context(Element):
-  def __init__(self, data, variant, debug = True):
+  def __init__(self, data, variant, debug = sys.flags.debug):
     super(Context, self).__init__()
     
 
