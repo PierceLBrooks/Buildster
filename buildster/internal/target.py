@@ -233,7 +233,8 @@ class Target(Build):
         for line in lines:
           write(descriptor, line.strip())
       elif (platform.system() == "Windows"):
-        write(descriptor, "list(APPEND BUILDSTER_LANGUAGES CSharp)")
+        if ("visual studio" in str(generator).lower()):
+            write(descriptor, "list(APPEND BUILDSTER_LANGUAGES CSharp)")
       write(descriptor, "project(\""+self.label.getContent()+"Project\" LANGUAGES ${BUILDSTER_LANGUAGES})")
       write(descriptor, "set(BUILDSTER_HEADERS )")
       write(descriptor, "set(BUILDSTER_FILES )")
