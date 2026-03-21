@@ -132,6 +132,7 @@ class Context(Element):
     
     self.conditionals = []
     
+    self.conditionals.append("include")
     self.conditionals.append("if")
     self.conditionals.append("if_check")
     self.conditionals.append("if_exists")
@@ -261,6 +262,7 @@ class Context(Element):
     nodeTags.append("base")
     nodeTags.append("directory")
     nodeTags.append("parallel")
+    nodeTags.append("include")
     for conditional in self.conditionals:
       if not (conditional in nodeTags):
         nodeTags.append(conditional)
@@ -417,6 +419,7 @@ class Context(Element):
     nodeParents["component"].append("components")
     nodeParents["parallel"].append("cmake")
     nodeParents["parallel"].append("target")
+    nodeParents["include"].append(self.any)
     
     nodeAttributes["json"].append(["key", False])
     nodeAttributes["data"].append(["id", False])
@@ -572,8 +575,11 @@ class Context(Element):
       attributes = self.nodeAttributes[tag]
       for i in range(len(attributes)):
         optional = attributes[i][1]
-        if ((optional) and (attribute == attributes[i][0])):
-          return True
+        if ((attribute == attributes[i][0]) and not (optional)):
+          return False
+      return False
+    else:
+      return True
     return False
     
   def exclude(self, leaf):
