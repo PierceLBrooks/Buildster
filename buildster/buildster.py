@@ -8,6 +8,7 @@ import sys
 import json
 import shlex
 import base64
+import inspect
 import hashlib
 import pathlib
 import logging
@@ -93,6 +94,24 @@ try:
   from .internal.base import Buildster
   from .internal.context import Context
   from .internal.parallel import Parallel
+  from .internal.body import Body
+  from .internal.enumeration import Enumeration
+  from .internal.enumeration_list import EnumerationList
+  from .internal.functor import Functor
+  from .internal.functor_list import FunctorList
+  from .internal.header import Header
+  from .internal.header_list import HeaderList
+  from .internal.klass import Klass
+  from .internal.klass_list import KlassList
+  from .internal.member import Member
+  from .internal.member_list import MemberList
+  from .internal.namespace import Namespace
+  from .internal.namespace_list import NamespaceList
+  from .internal.qualifier import Qualifier
+  from .internal.qualifier_list import QualifierList
+  from .internal.returner import Returner
+  from .internal.parent import Parent
+  from .internal.parent_list import ParentList
 except:
   from internal import *
   from internal.utilities import *
@@ -166,6 +185,24 @@ except:
   from internal.base import Buildster
   from internal.context import Context
   from internal.parallel import Parallel
+  from internal.body import Body
+  from internal.enumeration import Enumeration
+  from internal.enumeration_list import EnumerationList
+  from internal.functor import Functor
+  from internal.functor_list import FunctorList
+  from internal.header import Header
+  from internal.header_list import HeaderList
+  from internal.klass import Klass
+  from internal.klass_list import KlassList
+  from internal.member import Member
+  from internal.member_list import MemberList
+  from internal.namespace import Namespace
+  from internal.namespace_list import NamespaceList
+  from internal.qualifier import Qualifier
+  from internal.qualifier_list import QualifierList
+  from internal.returner import Returner
+  from internal.parent import Parent
+  from internal.parent_list import ParentList
 
 # https://stackoverflow.com/a/22989322
 class LocalFileAdapter(requests.adapters.HTTPAdapter):
@@ -527,6 +564,38 @@ def handle(context, node, tier, parents):
         element.timing = String(node.attrib["timing"].strip())
     elif (tag == "build"):
       element = BuildInstruction()
+    elif (tag == "enumerations"):
+      element = EnumerationList()
+    elif (tag == "functions"):
+      element = FunctorList()
+    elif (tag == "parents"):
+      element = ParentList()
+    elif (tag == "headers"):
+      element = HeaderList()
+    elif (tag == "classes"):
+      element = KlassList()
+    elif (tag == "members"):
+      element = MemberList()
+    elif (tag == "namespaces"):
+      element = NamespaceList()
+    elif (tag == "qualifiers"):
+      element = QualifierList()
+    elif (tag == "enumeration"):
+      element = Enumeration()
+    elif (tag == "function"):
+      element = Functor()
+    elif (tag == "parent"):
+      element = Parent()
+    elif (tag == "header"):
+      element = Header()
+    elif (tag == "class"):
+      element = Klass()
+    elif (tag == "member"):
+      element = Member()
+    elif (tag == "namespace"):
+      element = Namespace()
+    elif (tag == "qualifier"):
+      element = Qualifier()
     elif (tag == "arguments"):
       element = ArgumentList()
     elif (tag == "natives"):
@@ -776,6 +845,26 @@ def handle(context, node, tier, parents):
       elif (tag == "wget"):
         output = ensure(node.text)+flatten(output).strip()
         element.string = String(output.strip())
+      elif (tag == "body"):
+        output = ensure(node.text)+flatten(output).strip()
+        element = Body()
+        element.string = String(output.strip())
+      elif (tag == "parent"):
+        output = ensure(node.text)+flatten(output).strip()
+        element = Parent()
+        element.string = String(output.strip())
+      elif (tag == "header"):
+        output = ensure(node.text)+flatten(output).strip()
+        element = Header()
+        element.string = String(output.strip())
+      elif (tag == "qualifier"):
+        output = ensure(node.text)+flatten(output).strip()
+        element = Qualifier()
+        element.string = String(output.strip())
+      elif (tag == "returner"):
+        output = ensure(node.text)+flatten(output).strip()
+        element = Returner()
+        element.string = String(output.strip())
       elif (tag == "branch"):
         output = ensure(node.text)+flatten(output).strip()
         element = Branch()
@@ -856,6 +945,95 @@ def handle(context, node, tier, parents):
         output = ensure(node.text)+flatten(output).strip()
         element = Component()
         element.string = String(output.strip())
+      elif (tag == "enumeration"):
+        if ("label" in elements):
+          for label in elements["label"]:
+            element.label = label
+            break
+          elements["label"] = None
+        if ("members" in elements):
+          for members in elements["members"]:
+            element.members = members
+            break
+          elements["members"] = None
+      elif (tag == "function"):
+        if ("label" in elements):
+          for label in elements["label"]:
+            element.label = label
+            break
+          elements["label"] = None
+        if ("return" in elements):
+          for returner in elements["return"]:
+            element.returner = returner
+            break
+          elements["return"] = None
+        if ("body" in elements):
+          for body in elements["body"]:
+            element.body = body
+            break
+          elements["body"] = None
+        if ("arguments" in elements):
+          for arguments in elements["arguments"]:
+            element.arguments = arguments
+            break
+          elements["arguments"] = None
+        if ("qualifiers" in elements):
+          for qualifiers in elements["qualifiers"]:
+            element.qualifiers = qualifiers
+            break
+          elements["qualifiers"] = None
+      elif (tag == "class"):
+        if ("label" in elements):
+          for label in elements["label"]:
+            element.label = label
+            break
+          elements["label"] = None
+        if ("parents" in elements):
+          for parentals in elements["parents"]:
+            element.parents = parentals
+            break
+          elements["parents"] = None
+        if ("functions" in elements):
+          for functors in elements["functions"]:
+            element.functors = functors
+            break
+          elements["functions"] = None
+        if ("headers" in elements):
+          for headers in elements["headers"]:
+            element.headers = headers
+            break
+          elements["headers"] = None
+        if ("members" in elements):
+          for members in elements["members"]:
+            element.members = members
+            break
+          elements["members"] = None
+        if ("namespaces" in elements):
+          for namespaces in elements["namespaces"]:
+            element.namespaces = namespaces
+            break
+          elements["namespaces"] = None
+        if ("classes" in elements):
+          for klasses in elements["classes"]:
+            element.klasses = klasses
+            break
+          elements["classes"] = None
+      elif (tag == "member"):
+        if ("key" in elements):
+          for key in elements["key"]:
+            element.key = key
+            break
+          elements["key"] = None
+        if ("value" in elements):
+          for value in elements["value"]:
+            element.value = value
+            break
+          elements["value"] = None
+        if ("qualifiers" in elements):
+          for qualifiers in elements["qualifiers"]:
+            element.qualifiers = qualifiers
+            break
+          elements["qualifiers"] = None
       elif (tag == "variable"):
         if ("key" in elements):
           for key in elements["key"]:
@@ -942,6 +1120,46 @@ def handle(context, node, tier, parents):
           for variable in elements["variable"]:
             element.addVariable(variable)
           elements["variable"] = None
+      elif (tag == "enumerations"):
+        if ("enumeration" in elements):
+          for enumeration in elements["enumeration"]:
+            element.addEnumeration(enumeration)
+          elements["enumeration"] = None
+      elif (tag == "functions"):
+        if ("function" in elements):
+          for functor in elements["function"]:
+            element.addFunctor(functor)
+          elements["function"] = None
+      elif (tag == "parents"):
+        if ("parent" in elements):
+          for parental in elements["parent"]:
+            element.addParent(parental)
+          elements["parent"] = None
+      elif (tag == "headers"):
+        if ("header" in elements):
+          for header in elements["header"]:
+            element.addHeader(header)
+          elements["header"] = None
+      elif (tag == "classes"):
+        if ("class" in elements):
+          for klass in elements["class"]:
+            element.addKlass(klass)
+          elements["class"] = None
+      elif (tag == "members"):
+        if ("member" in elements):
+          for member in elements["member"]:
+            element.addMember(member)
+          elements["member"] = None
+      elif (tag == "namespaces"):
+        if ("namespace" in elements):
+          for namespace in elements["namespace"]:
+            element.addNamespace(namespace)
+          elements["namespace"] = None
+      elif (tag == "qualifiers"):
+        if ("qualifier" in elements):
+          for qualifier in elements["qualifier"]:
+            element.addQualifier(qualifier)
+          elements["qualifier"] = None
       elif (tag == "arguments"):
         if ("argument" in elements):
           for argument in elements["argument"]:
@@ -1167,6 +1385,9 @@ def handle(context, node, tier, parents):
       elif (tag == "sha512"):
         output = ensure(node.text)+flatten(output).strip()
         output = hashlib.sha512().update(output.encode()).hexdigest()
+      elif (tag == "hex"):
+        output = ensure(node.text)+flatten(output).strip()
+        output = hexify(output)
       elif (tag == "lower"):
         output = ensure(node.text)+flatten(output).strip()
         output = output.strip().lower()
@@ -1433,6 +1654,11 @@ def handle(context, node, tier, parents):
         if ("label" in elements):
           element.label = elements["label"][0]
           elements["label"][0] = None
+        if ("classes" in elements):
+          for klasses in elements["classes"]:
+            element.klasses = klasses
+            break
+          elements["classes"] = None
         if ("arguments" in elements):
           for arguments in elements["arguments"]:
             element.arguments = arguments
@@ -1657,15 +1883,24 @@ def run(target, data, environment):
   variants = []
   variants.append("Debug")
   variants.append("Release")
+  if (sys.flags.debug):
+    for i in range(len(data)):
+      print(data[i])
   for variant in variants:
     dictionary = {}
     for i in range(len(data)):
       element = data[i]
+      if not ("=" in element):
+        continue
       elements = element.split("=")
       if (len(elements) == 2):
         left = elements[0].strip()
         right = elements[1].strip()
         dictionary[left] = right
+        if (sys.flags.debug):
+          if (left == "BUILDSTER_XPP"):
+            sys.exit()
+            return False
     if ("BUILDSTER_VARIANT" in dictionary):
       if not (variant == dictionary["BUILDSTER_VARIANT"]):
         continue
@@ -1729,6 +1964,8 @@ def run(target, data, environment):
         print(base.tag)
       return False
     context = Context(dictionary, variant)
+    context.manifest = str(target.replace("\\", "/"))
+    context.entrypoint = str(os.path.abspath(inspect.getframeinfo(inspect.currentframe()).filename).replace("\\", "/"))
     if ("directory" in base.attrib):
       context.root = Buildster()
       context.root.node = base

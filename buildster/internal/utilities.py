@@ -2,6 +2,7 @@
 # Author: Pierce Brooks
 
 import os
+import base64
 import shutil
 import fnmatch
 import pathlib
@@ -14,6 +15,36 @@ import traceback
 import subprocess
 from urllib.parse import urlparse, unquote
 from urllib.request import urlretrieve
+
+def hexify(data):
+  hexes = ""
+  try:
+    if ("str" in str(type(data))):
+      for i in range(len(data)):
+        datum = hex(ord(data[i]))[2:]
+        while (len(datum) < 2):
+          datum = "0"+datum
+        hexes += datum
+    else:
+      for i in range(len(data)):
+        datum = hex(int(data[i]))[2:]
+        while (len(datum) < 2):
+          datum = "0"+datum
+        hexes += datum
+  except:
+    hexes = ""
+  return hexes
+
+def textualize(data):
+  text = ""
+  try:
+    if ("str" in str(type(data))):
+      text += base64.b64encode(data.encode()).decode()
+    else:
+      text += base64.b64encode(data).decode()
+  except:
+    text = ""
+  return text
 
 def retrieve(context, url, path = None):
   success = True

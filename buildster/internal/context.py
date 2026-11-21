@@ -21,6 +21,27 @@ class Context(Element):
     self.variant = variant
     
     
+    self.primitives = []
+    
+    self.primitives.append("int")
+    self.primitives.append("bool")
+    self.primitives.append("char")
+    self.primitives.append("long")
+    self.primitives.append("short")
+    self.primitives.append("signed")
+    self.primitives.append("unsigned")
+    self.primitives.append("float")
+    self.primitives.append("double")
+    self.primitives.append("uint64_t")
+    self.primitives.append("int64_t")
+    self.primitives.append("uint32_t")
+    self.primitives.append("int32_t")
+    self.primitives.append("uint16_t")
+    self.primitives.append("int16_t")
+    self.primitives.append("uint8_t")
+    self.primitives.append("int8_t")
+    
+    
     self.exclusions = []
     
     self.exclusions.append("o")
@@ -124,6 +145,7 @@ class Context(Element):
     self.substitutes.append("lower")
     self.substitutes.append("upper")
     self.substitutes.append("hash")
+    self.substitutes.append("hex")
     self.substitutes.append("md5")
     self.substitutes.append("sha1")
     self.substitutes.append("sha256")
@@ -248,6 +270,7 @@ class Context(Element):
     nodeTags.append("home")
     nodeTags.append("temporary")
     nodeTags.append("execute")
+    nodeTags.append("hex")
     nodeTags.append("encode")
     nodeTags.append("decode")
     nodeTags.append("escape")
@@ -263,6 +286,22 @@ class Context(Element):
     nodeTags.append("directory")
     nodeTags.append("parallel")
     nodeTags.append("include")
+    nodeTags.append("classes")
+    nodeTags.append("class")
+    nodeTags.append("headers")
+    nodeTags.append("header")
+    nodeTags.append("functions")
+    nodeTags.append("function")
+    nodeTags.append("namespaces")
+    nodeTags.append("namespace")
+    nodeTags.append("qualifiers")
+    nodeTags.append("qualifier")
+    nodeTags.append("return")
+    nodeTags.append("members")
+    nodeTags.append("member")
+    nodeTags.append("enumerations")
+    nodeTags.append("enumeration")
+    nodeTags.append("body")
     for conditional in self.conditionals:
       if not (conditional in nodeTags):
         nodeTags.append(conditional)
@@ -295,6 +334,7 @@ class Context(Element):
     nodeParents["sha1"].append(self.any)
     nodeParents["md5"].append(self.any)
     nodeParents["hash"].append(self.any)
+    nodeParents["hex"].append(self.any)
     nodeParents["lower"].append(self.any)
     nodeParents["upper"].append(self.any)
     nodeParents["python"].append(self.any)
@@ -347,6 +387,10 @@ class Context(Element):
     nodeParents["label"].append("target")
     nodeParents["label"].append("package")
     nodeParents["label"].append("module")
+    nodeParents["label"].append("function")
+    nodeParents["label"].append("class")
+    nodeParents["label"].append("namespace")
+    nodeParents["label"].append("enumeration")
     nodeParents["definitions"].append("target")
     nodeParents["definition"].append("definitions")
     nodeParents["key"].append("variable")
@@ -357,6 +401,8 @@ class Context(Element):
     nodeParents["value"].append("export")
     nodeParents["key"].append("set")
     nodeParents["value"].append("set")
+    nodeParents["key"].append("member")
+    nodeParents["value"].append("member")
     nodeParents["links"].append("target")
     nodeParents["link"].append("links")
     nodeParents["build"].append("pre")
@@ -364,6 +410,7 @@ class Context(Element):
     nodeParents["build"].append("dependency")
     nodeParents["arguments"].append("build")
     nodeParents["arguments"].append("target")
+    nodeParents["arguments"].append("function")
     nodeParents["argument"].append("arguments")
     nodeParents["natives"].append("cmake")
     nodeParents["natives"].append("target")
@@ -420,6 +467,26 @@ class Context(Element):
     nodeParents["parallel"].append("cmake")
     nodeParents["parallel"].append("target")
     nodeParents["include"].append(self.any)
+    nodeParents["classes"].append("target")
+    nodeParents["classes"].append("class")
+    nodeParents["class"].append("classes")
+    nodeParents["headers"].append("class")
+    nodeParents["header"].append("headers")
+    nodeParents["functions"].append("class")
+    nodeParents["function"].append("functions")
+    nodeParents["namespaces"].append("class")
+    nodeParents["namespace"].append("namespaces")
+    nodeParents["qualifiers"].append("member")
+    nodeParents["qualifiers"].append("function")
+    nodeParents["qualifier"].append("qualifiers")
+    nodeParents["return"].append("function")
+    nodeParents["members"].append("class")
+    nodeParents["members"].append("enumeration")
+    nodeParents["member"].append("members")
+    nodeParents["enumerations"].append("class")
+    nodeParents["enumerations"].append("namespace")
+    nodeParents["enumeration"].append("enumerations")
+    nodeParents["body"].append("function")
     
     nodeAttributes["json"].append(["key", False])
     nodeAttributes["data"].append(["id", False])
@@ -474,6 +541,8 @@ class Context(Element):
     self.projects = []
     self.labels = {}
     self.parents = {}
+    self.manifest = ""
+    self.entrypoint = ""
     self.environment = os.environ.copy()
     
     if not ("BUILDSTER_WD" in self.data):
@@ -650,3 +719,16 @@ class Context(Element):
       log = self.logs[i]
       logs += log
     return logs
+    
+  def getIsPrimitive(self, primitive):
+    if (primitive == None):
+      return False
+    temp = str(primitive).strip()
+    if (("*" in temp) or ("&" in temp)):
+      return True
+    temp = temp.split(" ")
+    temp = temp[len(temp)-1].strip()
+    if (temp in self.primitives):
+      return True
+    return False
+    

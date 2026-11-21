@@ -3,6 +3,7 @@
 
 import re
 import os
+import sys
 import fnmatch
 import platform
 import importlib
@@ -23,6 +24,7 @@ from .export_list import ExportList
 from .import_list import ImportList
 from .build_instruction import PreBuildInstruction
 from .build_instruction import PostBuildInstruction
+from .klass_list import KlassList
 
 from .utilities import *
 
@@ -49,7 +51,7 @@ endif()
 """
 
 class Target(Build):
-  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None, modules = None, exceptions = None, natives = None, linkage = None, parallel = None):
+  def __init__(self, label = None, subpath = None, definitions = None, links = None, imports = None, exports = None, generator = None, pre = None, post = None, arguments = None, packages = None, modules = None, exceptions = None, natives = None, linkage = None, parallel = None, klasses = None):
     super(Target, self).__init__()
     self.label = None
     self.subpath = None
@@ -99,6 +101,9 @@ class Target(Build):
     self.linkage = None
     if (type(linkage) == String):
       self.linkage = linkage
+    self.klasses = None
+    if (type(klasses) == KlassList):
+      self.klasses = klasses
       
   def install(self, owner, path, installation, variant, natives, parallel):
     result = cmake_install(owner.getContext(), path, variant, installation, natives, parallel)
@@ -106,6 +111,11 @@ class Target(Build):
     return True
     
   def build(self, owner, variant):
+    if (sys.flags.debug):
+      if (self.klasses == None):
+        print(str(self.klasses))
+      else:
+        print(str(self.toString(self.klasses)))
     context = owner.owner.getContext()
     installation = self.getPath(owner.owner, variant, "install")
     subpath = self.getPath(owner.owner, variant, None)
@@ -132,6 +142,8 @@ class Target(Build):
     exports = {}
     includes = []
     linkages = []
+    generations = {}
+    targets = []
     project = []
     packages = []
     definitions = []
@@ -192,7 +204,10 @@ class Target(Build):
       return False
     if not (os.path.isdir(path)):
       if (contains(wd(), path)):
-        os.makedirs(path, exist_ok=True)
+        try:
+          os.makedirs(path, exist_ok=True)
+        except:
+          pass
     if not (self.packages == None):
       packages = packages+self.packages.content
     if not (self.modules == None):
@@ -235,7 +250,7 @@ class Target(Build):
       elif (platform.system() == "Windows"):
         if ("visual studio" in str(generator).lower()):
             write(descriptor, "list(APPEND BUILDSTER_LANGUAGES CSharp)")
-      write(descriptor, "project(\""+self.label.getContent()+"Project\" LANGUAGES ${BUILDSTER_LANGUAGES})")
+      write(descriptor, "project(\""+str(self.label.getContent())+"Project\" LANGUAGES ${BUILDSTER_LANGUAGES})")
       write(descriptor, "set(BUILDSTER_HEADERS )")
       write(descriptor, "set(BUILDSTER_FILES )")
       for i in range(len(arguments)):
@@ -318,9 +333,62 @@ class Target(Build):
       for i in range(len(includes)):
         include = includes[i]
         if (contains(wd(), include)):
-          write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, include.replace("\\", "/"))+"\")")
+          write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+str(relativize(base, include.replace("\\", "/")))+"\")")
         else:
-          write(descriptor, "include_directories(\""+include.replace("\\", "/")+"\")")
+          write(descriptor, "include_directories(\""+str(include.replace("\\", "/"))+"\")")
+      if not (self.klasses == None):
+        for i in range(len(self.klasses.content)):
+          klass = self.klasses.content[i]
+          if not (klass == None):
+            if (klass.label == None):
+              continue
+            klasses = self.getKlasses(owner, None, 0, [], klass, str(adjust(os.path.join(wd(), str(context.root.directory.getContent()), str(self.label.getContent()), str(klass.label.getContent())).replace("\\", "/"))))
+            for j in range(len(klasses)):
+              if not (klasses[j] in project):
+                project.append(klasses[j])
+                generations[klasses[j]] = str(klass.label.getContent())
+      for generation in generations:
+        """
+        klass = generations[generation]
+        manifest = ""
+        if not (context.manifest == None):
+          manifest += str(context.manifest)
+        if (len(manifest) == 0):
+          continue
+        if (contains(wd(), generation)):
+          manifest = "${CMAKE_CURRENT_LIST_DIR}/"+str(relativize(base, manifest.replace("\\", "/")))
+        else:
+          manifest = str(manifest.replace("\\", "/"))
+        entrypoint = ""
+        if not (context.entrypoint == None):
+          entrypoint += str(context.entrypoint)
+        if (len(entrypoint) == 0):
+          continue
+        if (contains(wd(), generation)):
+          entrypoint = "${CMAKE_CURRENT_LIST_DIR}/"+str(relativize(base, entrypoint.replace("\\", "/")))
+        else:
+          entrypoint = str(entrypoint.replace("\\", "/"))
+        """
+        if (contains(wd(), generation)):
+          generation = str(relativize(base, generation.replace("\\", "/")))
+        else:
+          generation = str(generation.replace("\\", "/"))
+        targets.append("BUILDSTER_"+hexify(klass)+"_"+hexify(os.path.basename(generation)))
+        #write(descriptor, "add_custom_command(COMMAND \""+str(sys.executable.replace("\\", "/"))+"\" \""+entrypoint+"\" \""+manifest+"\" \"BUILDSTER_BUILD="+str(self.label.getContent())+"\" \"BUILDSTER_XPP="+klass+"\" WORKING_DIRECTORY \""+context.get("BUILDSTER_WD")+"\" OUTPUT \""+generation+"\" DEPENDS \""+manifest+"\" COMMENT \"Buildster generating \\\""+generation+"\\\"...\")")
+        #write(descriptor, "add_custom_target("+targets[len(targets)-1]+" DEPENDS \""+generation+"\")")
+        write(descriptor, "set_source_files_properties(\""+generation+"\" PROPERTIES GENERATED TRUE)")
+      """
+      inclusion = str(adjust(os.path.join(wd(), str(context.root.directory.getContent()), str(self.label.getContent()))).replace("\\", "/"))
+      if (contains(wd(), inclusion)):
+        write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+str(relativize(base, inclusion.replace("\\", "/")))+"\")")
+      else:
+        write(descriptor, "include_directories(\""+str(inclusion.replace("\\", "/"))+"\")")
+      """
+      inclusion = str(adjust(os.path.join(wd(), str(context.root.directory.getContent()))).replace("\\", "/"))
+      if (contains(wd(), inclusion)):
+        write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+str(relativize(base, inclusion.replace("\\", "/")))+"\")")
+      else:
+        write(descriptor, "include_directories(\""+str(inclusion.replace("\\", "/"))+"\")")
       for export in exports:
         if (exports[export][1] == "headers"):
           headers = exports[export][0].replace("\\", "/")
@@ -331,9 +399,9 @@ class Target(Build):
               except:
                 pass
           if (contains(wd(), headers)):
-            write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+relativize(base, headers.replace("\\", "/"))+"\")")
+            write(descriptor, "include_directories(\"${CMAKE_CURRENT_LIST_DIR}/"+str(relativize(base, headers.replace("\\", "/")))+"\")")
           else:
-            write(descriptor, "include_directories(\""+headers.replace("\\", "/")+"\")")
+            write(descriptor, "include_directories(\""+str(headers.replace("\\", "/"))+"\")")
         elif (exports[export][1] == "libraries"):
           libraries = exports[export][0].replace("\\", "/")
           if not (os.path.isdir(libraries)):
@@ -535,6 +603,8 @@ class Target(Build):
           write(descriptor, "target_compile_features("+self.label.getContent()+" PRIVATE cxx_std_"+context.root.cpp.getContent()+")")
         else:
           pass
+        for i in range(len(targets)):
+          write(descriptor, "add_dependencies("+self.label.getContent()+" "+targets[i]+")")
         write(descriptor, "install(TARGETS "+self.label.getContent()+")")
       else:
         context.log(self.node, "Source failure!")
@@ -686,7 +756,7 @@ class Target(Build):
             continue
         result.append(os.path.realpath(os.path.join(root, name)).replace("\\", "/"))
     return result
-
+    
   def getIncludes(self, owner):
     result = []
     path = self.getPath(owner, None, None)
@@ -700,4 +770,32 @@ class Target(Build):
     for root, folders, files in os.walk(path):
       result.append(root)
     return result
+    
+  def getKlasses(self, owner, descriptor, tier, parents, klass, path):
+    paths = []
+    descriptors = []
+    if (descriptor == None):
+      paths.append(path+".cpp")
+      paths.append(path+".hpp")
+    for i in range(len(paths)):
+      try:
+        os.makedirs(os.path.dirname(paths[i]), exist_ok=True)
+      except:
+        pass
+      descriptors.append(open(paths[i], "w"))
+      if (descriptor == None):
+        descriptor = descriptors[len(descriptors)-1]
+    if not (klass.klasses == None):
+      for i in range(len(klass.klasses.content)):
+        recursion = klass.klasses.content[i]
+        if not (recursion == None):
+          if (recursion.label == None):
+            continue
+          klasses = self.getKlasses(owner, descriptor, tier+1, parents+[klass], recursion, str(adjust(os.path.join(wd(), str(owner.getContext().root.directory.getContent()), str(self.label.getContent()), str(recursion.label.getContent()))).replace("\\", "/")))
+          for j in range(len(klasses)):
+            if not (klasses[j] in paths):
+              paths.append(klasses[j])
+    for i in range(len(descriptors)):
+      descriptors[i].close()
+    return paths
     
