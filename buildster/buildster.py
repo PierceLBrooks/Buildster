@@ -203,7 +203,51 @@ def handle(context, node, tier, parents):
       id = None
       if ("id" in node.attrib):
         id = node.attrib["id"]
-      if (tag == "if"):
+      if (tag == "include"):
+        for child in node:
+          context.tier = tier
+          call = handle(context, child, tier+1, parents+[node])
+          if not (call[0]):
+            result = False
+            break
+          if (child.tag in context.conditionals):
+            output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+          elif (child.tag in context.nonconditionals):
+            output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+        inclusion = ensure(node.text)+flatten(output).strip()
+        inclusion = inclusion.strip()
+        if not (os.path.exists(inclusion)):
+          return null
+        tree = xml_tree.parse(inclusion)
+        base = tree.getroot()
+        output = []
+        children = []
+        children.append(base)
+        for child in children:
+          context.tier = tier
+          call = handle(context, child, tier+1, parents+[node])
+          if not (call[0]):
+            result = False
+            break
+          if (child.tag in context.conditionals):
+            output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+          elif (child.tag in context.nonconditionals):
+            output.append([ensure(call[1]).strip(), ensure(child.tail).strip()])
+          for key in call[2]:
+            value = call[2][key]
+            if not (value == None):
+              for i in range(len(value)):
+                if not (value[i] == None):
+                  if (child.tag in context.conditionals):
+                    if not (key in elements):
+                      elements[key] = []
+                    elements[key].append(value[i])
+                  else:
+                    if not (child.tag in elements):
+                      elements[child.tag] = []
+                    elements[child.tag].append(value[i])
+        return [result, output, elements]
+      elif (tag == "if"):
         if not (context.find(id)):
           context.log(node, id+" does not exist in data!")
           children = False
