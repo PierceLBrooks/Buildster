@@ -55,7 +55,7 @@ class Extractor(Performer):
         return False
     else:
       try:
-        os.makedirs(os.path.join(path, filename))
+        os.makedirs(os.path.join(path, filename), exist_ok=True)
         pyunpack.Archive(content).extractall(os.path.join(path, filename))
       except:
         logging.error(traceback.format_exc())

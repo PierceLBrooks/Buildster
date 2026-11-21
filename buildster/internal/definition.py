@@ -19,6 +19,8 @@ class Definition(Object):
       self.value = value
       
   def getContent(self):
+    if (self.key == None):
+      return ""
     return self.key.getContent()+"="+self.value.getContent()
       
   def __str__(self):

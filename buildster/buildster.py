@@ -92,6 +92,7 @@ try:
   from .internal.project import Project
   from .internal.base import Buildster
   from .internal.context import Context
+  from .internal.parallel import Parallel
 except:
   from internal import *
   from internal.utilities import *
@@ -164,6 +165,7 @@ except:
   from internal.project import Project
   from internal.base import Buildster
   from internal.context import Context
+  from internal.parallel import Parallel
 
 # https://stackoverflow.com/a/22989322
 class LocalFileAdapter(requests.adapters.HTTPAdapter):
@@ -429,6 +431,10 @@ def handle(context, node, tier, parents):
         element.cpp = String(node.attrib["cpp"].strip())
       else:
         element.cpp = String("14")
+      if ("sudo" in node.attrib):
+        element.sudo = String(node.attrib["sudo"].strip())
+      else:
+        element.sudo = String("true")
       context.root = element
     elif (tag == "project"):
       element = Project()
@@ -786,6 +792,10 @@ def handle(context, node, tier, parents):
         output = ensure(node.text)+flatten(output).strip()
         element = Argument()
         element.string = String(output.strip())
+      elif (tag == "parallel"):
+        output = ensure(node.text)+flatten(output).strip()
+        element = Parallel()
+        element.string = String(output.strip())
       elif (tag == "native"):
         output = ensure(node.text)+flatten(output).strip()
         element = Native()
@@ -958,6 +968,11 @@ def handle(context, node, tier, parents):
             element.natives = natives
             break
           elements["natives"] = None
+        if ("parallel" in elements):
+          for parallel in elements["parallel"]:
+            element.parallel = parallel
+            break
+          elements["parallel"] = None
       elif (tag == "root"):
         output = ensure(node.text)+flatten(output).strip()
         element.string = String(output.strip())
@@ -1365,6 +1380,9 @@ def handle(context, node, tier, parents):
       elif (tag == "buildster"):
         context.log(node, element.toString()+"\n")
       elif (tag == "target"):
+        if ("parallel" in elements):
+          element.parallel = elements["parallel"][0]
+          elements["parallel"][0] = None
         if ("subpath" in elements):
           element.subpath = elements["subpath"][0]
           elements["subpath"][0] = None
@@ -1640,6 +1658,22 @@ def run(target, data, environment):
             if (sys.flags.debug):
               logging.error(traceback.format_exc())
       target = final
+    if not (os.path.exists(target)):
+      if not (platform.system().lower().strip() == "windows"):
+        if (target.startswith("~")):
+          final = target.split("/")
+          if not (final[0] == "~"):
+            final = None
+          else:
+            final[0] = str(pathlib.Path.home())
+            if (len(target) > 1):
+              final = os.path.join(final[0], "/".join(final[1:]))
+            else:
+              final = final[0]
+            if not (os.path.exists(final)):
+              final = None
+          if not (final == None):
+            target = final
     if not (os.path.exists(target)):
       if (sys.flags.debug):
         print(target)

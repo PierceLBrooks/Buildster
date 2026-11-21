@@ -50,6 +50,8 @@ class Import(Object):
       self.label = label
       
   def getContent(self):
+    if (self.label == None):
+      return ""
     return self.label.getContent()
     
   def doImport(self, owner, variant):

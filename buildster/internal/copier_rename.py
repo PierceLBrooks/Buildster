@@ -14,6 +14,8 @@ class CopierRename(Object):
       self.name = name
       
   def getContent(self):
+    if (self.name == None):
+      return ""
     return self.name.getContent()
     
   def __str__(self):
