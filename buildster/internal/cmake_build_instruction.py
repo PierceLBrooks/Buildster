@@ -70,8 +70,8 @@ class CmakeBuildInstruction(BuildInstruction):
   def buildVariant(self, owner, arguments, cmake, installation, variant):
     parallel = None
     natives = None
-    generator = None
     architecture = None
+    generator = None
     if not (self.generator == None):
       generator = self.generator.getContent()
       if not (self.generator.architecture == None):
@@ -89,7 +89,7 @@ class CmakeBuildInstruction(BuildInstruction):
     path = os.path.join(cmake, variant.lower()).replace("\\", "/")
     result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.join(path, "..", self.source.getContent()).replace("\\", "/"), path, installation, variant)
     owner.getContext().log(self.node, result)
-    result = cmake_build(owner.getContext(), os.path.join(cmake, variant.lower()).replace("\\", "/"), variant, natives, parallel)
+    result = cmake_build(owner.getContext(), os.path.join(cmake, variant.lower()).replace("\\", "/"), variant, natives, parallel, generator=generator)
     owner.getContext().log(self.node, result)
     return True
     
@@ -102,6 +102,10 @@ class CmakeBuildInstruction(BuildInstruction):
   def installVariant(self, owner, cmake, installation, variant):
     parallel = None
     natives = None
+    generator = None
+    if (generator == None):
+      if not (self.generator == None):
+        generator = self.generator.getContent().strip()
     if not (self.natives == None):
       natives = self.natives.getContent()
       for i in range(len(natives)):
@@ -112,7 +116,7 @@ class CmakeBuildInstruction(BuildInstruction):
         natives.remove(None)
     if not (self.parallel == None):
       parallel = self.parallel.getContent()
-    result = cmake_install(owner.getContext(), os.path.join(cmake, variant.lower()).replace("\\", "/"), variant, os.path.join(installation, variant.lower()).replace("\\", "/"), natives, parallel)
+    result = cmake_install(owner.getContext(), os.path.join(cmake, variant.lower()).replace("\\", "/"), variant, os.path.join(installation, variant.lower()).replace("\\", "/"), natives, parallel, generator=generator)
     owner.getContext().log(self.node, result)
     return True
     

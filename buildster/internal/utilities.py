@@ -384,7 +384,7 @@ def cmake_configure(generator, architecture, arguments, source, path, installati
   os.chdir(cwd)
   return result
   
-def cmake_build(context, path, variant, natives, parallel, environment = None):
+def cmake_build(context, path, variant, natives, parallel, environment = None, generator = None):
   command = []
   command.append("cmake")
   command.append("--build")
@@ -393,8 +393,20 @@ def cmake_build(context, path, variant, natives, parallel, environment = None):
     command.append("--config")
     command.append(variant)
   if not (parallel == None):
-    command.append("--parallel")
-    command.append(parallel)
+    if not (generator == None):
+      if ("MinGW" in generator):
+        if ((natives == None) or (len(natives) == 0)):
+          command.append("--")
+          command.append("-j"+str(parallel))
+        else:
+          command.append("--parallel")
+          command.append(parallel)
+      else:
+        command.append("--parallel")
+        command.append(parallel)
+    else:
+      command.append("--parallel")
+      command.append(parallel)
   if not (natives == None):
     length = len(natives)
     if (length > 0):
@@ -404,7 +416,7 @@ def cmake_build(context, path, variant, natives, parallel, environment = None):
   result = execute_command(command, environment)
   return result
   
-def cmake_install(context, path, variant, installation, natives, parallel, environment = None):
+def cmake_install(context, path, variant, installation, natives, parallel, environment = None, generator = None):
   command = []
   if not ((platform.system() == "Windows") or (context.root.sudo.getContent() == "false")):
     command.append("sudo")
@@ -417,8 +429,20 @@ def cmake_install(context, path, variant, installation, natives, parallel, envir
   command.append("--target")
   command.append("install")
   if not (parallel == None):
-    command.append("--parallel")
-    command.append(parallel)
+    if not (generator == None):
+      if ("MinGW" in generator):
+        if ((natives == None) or (len(natives) == 0)):
+          command.append("--")
+          command.append("-j"+str(parallel))
+        else:
+          command.append("--parallel")
+          command.append(parallel)
+      else:
+        command.append("--parallel")
+        command.append(parallel)
+    else:
+      command.append("--parallel")
+      command.append(parallel)
   if not (natives == None):
     length = len(natives)
     if (length > 0):

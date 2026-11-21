@@ -101,7 +101,12 @@ class Target(Build):
       self.linkage = linkage
       
   def install(self, owner, path, installation, variant, natives, parallel):
-    result = cmake_install(owner.getContext(), path, variant, installation, natives, parallel)
+    generator = None
+    if not (self.generator == None):
+      generator = self.getGenerator(owner)
+    else:
+      generator = self.generator.getContent().strip()
+    result = cmake_install(owner.getContext(), path, variant, installation, natives, parallel, generator=generator)
     owner.getContext().log(self.node, result)
     return True
     
@@ -597,7 +602,7 @@ class Target(Build):
       temp += os.path.realpath(os.path.join(path, "build", variant.lower())).replace("\\", "/")
     result = cmake_configure(generator, architecture, arguments+["-DCMAKE_BUILD_TYPE="+variant], os.path.realpath(os.path.join(path, subpath)).replace("\\", "/"), temp, installation, None)
     owner.getContext().log(self.node, result)
-    result = cmake_build(owner.getContext(), temp, variant, natives, parallel)
+    result = cmake_build(owner.getContext(), temp, variant, natives, parallel, generator=generator)
     owner.getContext().log(self.node, result)
     success = self.install(owner, temp, installation.replace("\\", "/"), variant, natives, parallel)
     return success
