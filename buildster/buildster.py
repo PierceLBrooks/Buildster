@@ -316,7 +316,7 @@ def handle(context, node, tier, parents):
           return [result, output, elements]
       elif (tag == "if_exists"):
           exists = None
-          for child in parent:
+          for child in node:
             if (child.tag == "exists"):
               exists = child
               break
