@@ -230,7 +230,7 @@ class Target(Build):
       write(descriptor, "set(BUILDSTER_LANGUAGES )")
       write(descriptor, "list(APPEND BUILDSTER_LANGUAGES C)")
       write(descriptor, "list(APPEND BUILDSTER_LANGUAGES CXX)")
-      if (platform.system() == "Darwin"):
+      if ((platform.system() == "Darwin") and not ("Unix" in generator)):
         write(descriptor, "list(APPEND BUILDSTER_LANGUAGES OBJC)")
         write(descriptor, "list(APPEND BUILDSTER_LANGUAGES OBJCXX)")
         write(descriptor, "list(APPEND BUILDSTER_LANGUAGES Swift)")
